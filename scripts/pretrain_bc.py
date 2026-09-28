@@ -12,6 +12,8 @@ actor (same architecture as TD3) is trained with MSE on (observation -> teacher 
 Writes runs/<name>/:
     config.yaml          config used (the fine-tuning run should use the same observation settings)
     checkpoints/bc.pt    TD3Agent checkpoint: BC actor (+ target), freshly initialized critic
+    checkpoints/bc_buffer.npz   the collected transitions (warmstart.save_buffer), to prefill
+                         the replay buffer: train.py --init-buffer (the critic can learn at once)
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ from exo_rl.agents.td3 import TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
 from exo_rl.evaluation import evaluate, no_exo_effort  # noqa: E402
-from exo_rl.utils import configure_torch_threads, load_config, pick_device  # noqa: E402
+from exo_rl.utils import atomic_write, configure_torch_threads, load_config, pick_device  # noqa: E402
 from exo_rl.warmstart import causal_teacher, label_episode, mse, teacher_action, train_bc  # noqa: E402
 
 
@@ -45,6 +47,7 @@ class Collector:
         self.obs, _ = runner.reset()
         self.last_tau = np.zeros((n, 4))                  # the teacher can only use the past
         self.hist = [([], []) for _ in range(n)]           # per env: observations, tau_needed
+        self.transitions = []                              # (obs, action, reward, next_obs, terminated)
 
     def _flush(self, i, xs, ys):
         o, tau = self.hist[i]
@@ -66,6 +69,7 @@ class Collector:
             self.runner.step_async(a)
             obs2, trans = self.runner.step_wait()
             for i, t in enumerate(trans):
+                self.transitions.append((self.obs[i], a[i], t.reward, t.next_obs, t.terminated))
                 self.hist[i][0].append(self.obs[i])
                 self.hist[i][1].append(t.info["tau_needed"])
                 self.last_tau[i] = t.info["tau_needed"]
@@ -154,10 +158,22 @@ def main():
     agent.actor_t.load_state_dict(agent.actor.state_dict())
     path = os.path.join(run_dir, "checkpoints", "bc.pt")
     agent.save(path, step=0)
+    buf_path = os.path.join(run_dir, "checkpoints", "bc_buffer.npz")
+    if ws.get("save_buffer", True):
+        tr = col.transitions
+
+        def write(tmp):
+            with open(tmp, "wb") as f:
+                np.savez(f, obs=np.array([x[0] for x in tr], np.float32), act=np.array([x[1] for x in tr], np.float32),
+                         rew=np.array([x[2] for x in tr], np.float32)[:, None],
+                         next_obs=np.array([x[3] for x in tr], np.float32),
+                         not_done=1.0 - np.array([x[4] for x in tr], np.float32)[:, None])
+        atomic_write(buf_path, write)
+        print(f"[bc] saved {len(tr)} transitions to {buf_path}")
     print(f"[bc] saved {path} after {(time.time() - t0) / 60:.1f} min")
     report(cfg, agent, float(ws["teacher_fraction"]), int(ws.get("eval_episodes", 2)))
     print(f"\nFine-tune with: python scripts/train.py --name {name}_rl --config {run_dir}/config.yaml "
-          f"--init-from {path}")
+          f"--init-from {path}" + (f" --init-buffer {buf_path}" if ws.get("save_buffer", True) else ""))
 
 
 if __name__ == "__main__":

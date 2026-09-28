@@ -2,6 +2,7 @@
 
     python scripts/evaluate.py --run runs/demo                 # uses best.pt
     python scripts/evaluate.py --run runs/demo --ckpt latest.pt --episodes 5
+    python scripts/evaluate.py --run runs/demo --randomized 10     # + 10 random pilots per task
 
 Writes to runs/<name>/eval_<ckpt>/:
     summary.csv                per task and mode: effort, reduction vs off, tracking, torques
@@ -10,6 +11,8 @@ Writes to runs/<name>/eval_<ckpt>/:
     effort_by_task.png         human effort with/without exo (the ACE-relevant plot)
     gait_<task>.png            hip/knee angle vs % cycle (sim vs reference) and human torque
                                with/without exo, for each cyclic task
+    summary_randomized.csv     with --randomized N: the same comparison over N fixed random
+                               pilots (body size, strength, latency, noise...), one episode each
 """
 from __future__ import annotations
 
@@ -42,11 +45,45 @@ def phase_average(trace, key, idx, bins=50, skip=100):
     return np.array([val[b == i].mean() if np.any(b == i) else np.nan for i in range(bins)])
 
 
+def randomized_table(env, cfg, policy, tasks, n, out_dir):
+    """Mean over n random pilots (seeds 3000+i); each pilot is compared with ITSELF exo off / no exo."""
+    no_exo = no_exo_effort(cfg, tasks, n, seed0=3000, nominal=False)
+    rows = []
+    for task in tasks:
+        eff = {m: [run_episode(env, policy, task, m, seed=3000 + i, nominal=False) for i in range(n)]
+               for m in MODES}
+        off = np.array([e["effort"] for e in eff["off"]])
+        for mode in MODES:
+            e = np.array([x["effort"] for x in eff[mode]])
+            row = {"task": task, "mode": mode, "pilots": n, "effort": round(float(e.mean()), 4),
+                   "effort_reduction_pct": round(float(np.mean(100 * (1 - e / off))), 2),
+                   "worst_pilot_reduction_pct": round(float(np.min(100 * (1 - e / off))), 2),
+                   "failed": round(float(np.mean([x["failed"] for x in eff[mode]])), 2)}
+            if no_exo:
+                row["net_vs_no_exo_pct"] = round(float(100 * (1 - e.mean() / no_exo[task])), 2)
+            rows.append(row)
+    with open(os.path.join(out_dir, "summary_randomized.csv"), "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    net_hdr = f"{'net vs no exo':>15s}" if no_exo else ""
+    print(f"\nRandomized pilots ({n} per task, each compared with itself):")
+    print(f"{'task':15s}{'mode':9s}{'vs exo off':>12s}{'worst pilot':>13s}{net_hdr}{'fail':>6s}")
+    for r in rows:
+        if r["mode"] == "off":
+            continue
+        net = f"{r['net_vs_no_exo_pct']:+14.1f}%" if no_exo else ""
+        print(f"{r['task']:15s}{r['mode']:9s}{r['effort_reduction_pct']:+11.1f}%{r['worst_pilot_reduction_pct']:+12.1f}%"
+              f"{net}{r['failed']:6.2f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
     ap.add_argument("--ckpt", default="best.pt")
     ap.add_argument("--episodes", type=int, default=3)
+    ap.add_argument("--randomized", type=int, default=0, metavar="N",
+                    help="also evaluate on N random pilots (tests adaptation across people)")
     args = ap.parse_args()
 
     cfg = load_config(os.path.join(args.run, "config.yaml"))
@@ -91,6 +128,9 @@ def main():
     if no_exo:
         print("\n'vs exo off' = benefit of powering the exo you're wearing; "
               "'net vs no exo' = compared with the pilot not wearing it (what ACE measures).")
+
+    if args.randomized:
+        randomized_table(env, cfg, policy, tasks, args.randomized, out_dir)
 
     # Effort bar chart
     fig, ax = plt.subplots(figsize=(8, 4))

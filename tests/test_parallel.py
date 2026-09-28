@@ -45,3 +45,28 @@ def test_autoreset_stores_true_final_observation(cfg):
         assert trans[0].reset_task is not None and "reward_terms" in trans[0].info
     finally:
         runner.close()
+
+
+def test_interrupt_closes_envs_and_saves_latest(tmp_path):
+    import signal
+    import time
+    run = tmp_path / "intr"
+    cmd = [sys.executable, os.path.join(ROOT, "scripts", "train.py"), "--name", str(run),
+           "--set", "train.num_envs=2", "--set", "train.start_steps=100", "--set", "train.eval_every=100000",
+           "--set", "tasks.names=[squat]", "--set", "agent.batch_size=32", "--set", "agent.buffer_size=5000"]
+    if os.name == "nt":
+        p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                             start_new_session=True)
+    deadline = time.time() + 120
+    while not (run / "episodes.csv").exists() and time.time() < deadline:
+        time.sleep(0.5)                                   # training loop is running
+    if os.name == "nt":
+        p.send_signal(signal.CTRL_BREAK_EVENT)
+    else:
+        os.killpg(p.pid, signal.SIGINT)
+    out, _ = p.communicate(timeout=60)
+    assert "interrupted at step" in out, out[-2000:]
+    assert (run / "checkpoints" / "latest.pt").exists()

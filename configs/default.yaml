@@ -110,6 +110,8 @@ train:
   eval_every: 20000
   eval_episodes: 5
   latest_every: 5000         # write checkpoints/latest.pt this often (also after every eval)
+  eval_async: false          # true: evaluate in a background process while training continues
+  best_metric: mean          # best.pt by mean effort reduction over tasks | worst (worst task counts)
   save_every: 50000
   device: auto
   num_envs: 1                # parallel simulation processes (AsyncVectorEnv); 1 = in-process, as before

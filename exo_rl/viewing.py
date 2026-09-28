@@ -118,6 +118,15 @@ class Stats:
                   f"(mean {np.mean(self.effort):.3f})  exo tau [hipL kneeL hipR kneeR] = {np.round(info['tau_exo_cmd'], 1)}")
 
 
+def exit_after_viewer(code: int = 0):
+    """End the process after a live viewer closed. MuJoCo's passive viewer sometimes segfaults
+    during normal interpreter teardown (seen ~1 in 10 exits on Windows, MuJoCo 3.4); skipping
+    the teardown avoids it. Everything worth keeping must be written before calling this."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 class LiveView:
     """MuJoCo passive viewer, paced to `speed` x real time. It displays a copy of the env's
     first model and mirrors the state into it, so the window survives env.reset() rebuilding

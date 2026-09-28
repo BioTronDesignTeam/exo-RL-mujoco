@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import signal
 import sys
 import time
 from collections import defaultdict
@@ -38,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
-from exo_rl.evaluation import evaluate  # noqa: E402
+from exo_rl.evaluation import PeriodicEval, eval_score  # noqa: E402
 from exo_rl.utils import atomic_write, configure_torch_threads, load_config, pick_device  # noqa: E402
 
 
@@ -70,7 +71,11 @@ def main():
     ap.add_argument("--max-minutes", type=float, default=None, help="stop and snapshot after this long")
     ap.add_argument("--init-from", default=None,
                     help="start actor/critic (+targets) from this checkpoint; fresh optimizers, empty buffer")
+    ap.add_argument("--init-buffer", default=None,
+                    help="prefill the replay buffer (e.g. bc_buffer.npz from pretrain_bc.py); learning starts at once")
     args = ap.parse_args()
+    if hasattr(signal, "SIGBREAK"):          # Windows: Ctrl+Break stops cleanly, like Ctrl+C
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
 
     name = args.name or time.strftime("run_%Y%m%d_%H%M%S")
     run_dir = os.path.join("runs", name)
@@ -112,6 +117,16 @@ def main():
         if float(cfg["agent"].get("bc_weight", 0.0)) > 0:
             agent.set_bc_reference()
         print(f"[train] initialized actor/critic from {init_from}")
+    prefilled = 0
+    if args.init_buffer and not args.resume:
+        data = np.load(args.init_buffer)
+        if data["obs"].shape[1] != obs_dim:
+            sys.exit(f"[train] error: --init-buffer {args.init_buffer} has obs size {data['obs'].shape[1]}, "
+                     f"but this config gives {obs_dim}")
+        for o, a, r, o2, nd in zip(data["obs"], data["act"], data["rew"], data["next_obs"], data["not_done"]):
+            buf.add(o, a, float(r[0]), o2, nd[0] == 0.0)
+        prefilled = len(buf)
+        print(f"[train] prefilled the replay buffer with {prefilled} transitions from {args.init_buffer}")
     if args.resume:
         agent = TD3Agent.load(os.path.join(snap_dir, "agent.pt"), device)
         data = np.load(os.path.join(snap_dir, "buffer.npz"))
@@ -124,6 +139,7 @@ def main():
         start, ep_i, best = st["step"] + 1, st["episode"], st["best"]
         baseline = st.get("baseline")
         init_from = st.get("init_from")         # keeps the warm-start schedule on resume
+        prefilled = st.get("prefilled", 0)
         np.random.seed(seed + start)
         print(f"[train] resumed at step {start} (buffer {len(buf)})")
     runner = make_runner(cfg, num_envs, seed + (start if args.resume else 0))   # fresh seeds on resume
@@ -141,6 +157,7 @@ def main():
         def write_state(tmp):
             with open(tmp, "w") as f:
                 yaml.safe_dump({"step": step, "episode": ep_i, "best": float(best), "init_from": init_from,
+                                "prefilled": prefilled,
                                 "baseline": {k: float(v) for k, v in baseline.items()} if baseline else None}, f)
 
         atomic_write(os.path.join(snap_dir, "buffer.npz"), write_buffer)
@@ -148,6 +165,8 @@ def main():
         print(f"[train] snapshot saved at step {step}; continue with --name {name} --resume")
 
     start_steps, total_steps = int(tr["start_steps"]), int(tr["total_steps"])
+    if prefilled >= int(cfg["agent"]["batch_size"]):
+        start_steps = 0                          # the prefilled buffer replaces the warm-up
     batch_size = int(cfg["agent"]["batch_size"])
     expl = float(cfg["agent"]["expl_noise"])
     upd_info = {"critic_loss": float("nan"), "q_mean": float("nan"), "actor_loss": float("nan")}
@@ -176,6 +195,29 @@ def main():
             upd_info.update(agent.update(buf, batch_size, actor_frozen=u <= 0, bc_weight=bc_w))
         if init_from:
             upd_info["bc_weight"] = bc_w
+
+    best_metric = tr.get("best_metric", "mean")
+    evaluator = PeriodicEval(cfg, eval_env, tasks, int(tr["eval_episodes"]), os.path.join(run_dir, "checkpoints"),
+                             async_=bool(tr.get("eval_async", False)))
+    evaluator.baseline = baseline
+
+    def report(finished):
+        """Log finished evaluations; save best.pt (by train.best_metric)."""
+        nonlocal best, baseline
+        for ev_step, res, save_best in finished:
+            baseline = evaluator.baseline
+            mean_red = float(np.mean([v["effort_reduction_pct"] for v in res.values()]))
+            fail = float(np.mean([v["fail_rate"] for v in res.values()]))
+            for t, v in res.items():
+                ev_log.write({"step": ev_step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
+            print(f"[eval ] step {ev_step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
+                  + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
+            score = eval_score(res, best_metric)
+            if score > best:
+                best = score
+                save_best(os.path.join(run_dir, "checkpoints", "best.pt"))
+                print(f"[eval ] new best ({score:+.1f}, {best_metric})")
+        evaluator.discard(finished)
 
     step = start - 1                          # transitions collected so far (all envs)
     obs, ep_task = runner.reset()
@@ -224,24 +266,12 @@ def main():
                 ep_i += 1
 
             if crossed(prev, step, int(tr["eval_every"])):
-                policy = lambda o: agent.act(o, noise=0.0)  # noqa: E731
-                res, baseline = evaluate(eval_env, policy, tasks, int(tr["eval_episodes"]), baseline=baseline)
-                mean_red = float(np.mean([v["effort_reduction_pct"] for v in res.values()]))
-                fail = float(np.mean([v["fail_rate"] for v in res.values()]))
-                for t, v in res.items():
-                    ev_log.write({"step": step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
-                print(f"[eval ] step {step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
-                      + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
+                report(evaluator.run(agent, step))
                 agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
-                score = mean_red - 100.0 * fail
-                if score > best:
-                    best = score
-                    agent.save(os.path.join(run_dir, "checkpoints", "best.pt"), step)
-                    print(f"[eval ] new best ({score:+.1f})")
-
             elif crossed(prev, step, int(tr.get("latest_every", 5000))):
                 agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
 
+            report(evaluator.poll())
             if crossed(prev, step, int(tr["save_every"])):
                 agent.save(os.path.join(run_dir, "checkpoints", f"step_{step}.pt"), step)
 
@@ -249,14 +279,18 @@ def main():
             if args.max_minutes and (time.time() - t0) > 60 * args.max_minutes and (runner.overlap or any_done):
                 print(f"[train] {step - start + 1} steps in {(time.time() - t0) / 60:.1f} min "
                       f"({(step - start + 1) / (time.time() - t0):.0f} steps/s incl. evaluation)")
+                report(evaluator.poll(wait=True))
                 snapshot(step)
                 return
+        report(evaluator.poll(wait=True))
     except KeyboardInterrupt:
-        print("[train] interrupted; closing envs (no snapshot saved)")
         runner.close(terminate=True)
         runner = None
+        agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
+        print(f"[train] interrupted at step {step}; saved latest.pt (no resume snapshot)")
         return
     finally:
+        evaluator.close()
         if runner is not None:
             runner.close()
 

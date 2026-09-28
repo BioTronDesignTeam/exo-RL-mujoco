@@ -19,8 +19,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exo_rl.viewing import (LiveView, Stats, load_policy, macos_viewer_hint, make_view_env,  # noqa: E402
-                            record, view_config)
+from exo_rl.viewing import (LiveView, Stats, exit_after_viewer, load_policy, macos_viewer_hint,  # noqa: E402
+                            make_view_env, record, view_config)
 
 
 def run_live(env, policy, args):
@@ -91,6 +91,8 @@ def main():
     stats = run_record(env, policy, args) if args.record else run_live(env, policy, args)
     if stats.effort:
         print(f"session mean human effort: {np.mean(stats.effort):.3f}")
+    if not args.record:
+        exit_after_viewer()
 
 
 if __name__ == "__main__":

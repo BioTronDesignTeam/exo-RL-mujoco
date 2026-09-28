@@ -23,8 +23,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exo_rl.viewing import (CheckpointWatcher, LiveView, macos_viewer_hint, make_view_env,  # noqa: E402
-                            record, reset_view_env, view_config)
+from exo_rl.viewing import (CheckpointWatcher, LiveView, exit_after_viewer, macos_viewer_hint,  # noqa: E402
+                            make_view_env, record, reset_view_env, view_config)
 
 
 def poll(watcher) -> bool:
@@ -114,6 +114,8 @@ def main():
         run_record(env, watcher, args) if args.record_dir else run_live(env, watcher, args)
     except KeyboardInterrupt:
         pass
+    if not args.record_dir:
+        exit_after_viewer()
 
 
 if __name__ == "__main__":

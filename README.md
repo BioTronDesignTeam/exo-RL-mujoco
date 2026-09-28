@@ -13,10 +13,10 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 40 tests, ~1 min — confirms everything works
+python -m pytest                # 44 tests, ~1.5 min — confirms everything works
 ```
 
-- **Video recording** needs `imageio[ffmpeg]` (`pip install "imageio[ffmpeg]"`).
+- **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 
@@ -50,6 +50,7 @@ python -m deploy.run_hardware --export runs/mk1/export --sim   # deployment dry 
 | `--max-minutes N` | — | Stop after N minutes and save a snapshot |
 | `--resume` | off | Continue `runs/NAME/` from its snapshot |
 | `--init-from FILE` | — | Start actor + critic from a checkpoint (fresh optimizers, empty buffer); see [Training faster](#training-faster) |
+| `--init-buffer FILE` | — | Prefill the replay buffer (e.g. `bc_buffer.npz` from `pretrain_bc.py`); learning starts at once |
 
 Writes `runs/NAME/`:
 - `config.yaml`
@@ -122,10 +123,11 @@ task as a text overlay in the viewer. It waits if the run or checkpoint doesn't 
 | `--run PATH` | required | Run folder |
 | `--ckpt FILE` | `best.pt` | Checkpoint |
 | `--episodes N` | `3` | Episodes per task and mode |
+| `--randomized N` | `0` | Also test on N random pilots (size, strength, latency, noise), each compared with itself |
 
 It compares exo **off / policy**, plus **not wearing the exo**, which is the ACE comparison.
 Output goes to `runs/NAME/eval_<ckpt>/`:
-- `summary.csv`
+- `summary.csv` (and `summary_randomized.csv` with `--randomized`: mean and worst pilot)
 - `effort_by_task.png`
 - `gait_<task>.png` (joint angles and torques over the gait cycle)
 
@@ -231,8 +233,8 @@ critic. Observation settings and `agent.hidden` must match; otherwise it exits w
 **Warm start: teacher, then behavior cloning, then RL.** Instead of starting RL from a random policy:
 
 ```bash
-python scripts/pretrain_bc.py --name bc                       # teacher -> BC actor (bc.pt)
-python scripts/train.py --name ws --config runs/bc/config.yaml --init-from runs/bc/checkpoints/bc.pt
+python scripts/pretrain_bc.py --name bc                       # teacher -> BC actor (bc.pt, bc_buffer.npz)
+python scripts/train.py --name ws --config runs/bc/config.yaml --init-from runs/bc/checkpoints/bc.pt     --init-buffer runs/bc/checkpoints/bc_buffer.npz
 ```
 
 With `--init-from`, the `start_steps` warm-up uses the loaded policy (plus exploration noise)
@@ -245,7 +247,9 @@ are off unless `--init-from` is used.
 
 | Override | Effect |
 |---|---|
+| `train.eval_async=true` | Evaluate in a background process while training continues (same results) |
 | `train.eval_every=50000` / `train.eval_episodes=2` | Evaluation is cheap with 1 env but took ~40% of wall time with 4 envs (see above) |
+| `train.best_metric=worst` | Pick `best.pt` by the worst task, so one task can't regress unnoticed |
 | `agent.hidden=[128,128]` | Roughly 3× cheaper updates; check that final effort holds up |
 | `agent.batch_size=512` | Nearly free on a GPU; on CPU cost grows with batch size |
 | `"tasks.names=[squat]"` | Train on fewer tasks while tuning, then fine-tune on all with `--init-from` |
@@ -309,7 +313,7 @@ exo_rl/*.py       evaluation, warm start (teacher + behavior cloning), viewing h
 scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            40 tests
+tests/            44 tests
 runs/demo/        example trained run
 ```
 

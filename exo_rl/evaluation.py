@@ -2,19 +2,24 @@
 
 The headline metric is effort reduction (%) relative to exo-off, mirroring how ACE scores
 the Athletic Test. Tracking error, peak torque, and smoothness are reported alongside.
-Evaluation uses nominal (non-randomized) parameters and fixed seeds so runs are comparable.
+Evaluation uses fixed seeds so runs are comparable, and by default the nominal pilot.
+With nominal=False each seed draws a randomized pilot (body, strength, latency, noise...);
+the draws don't depend on whether the exo is mounted, so the same seed gives the same pilot
+for exo on, exo off, and no exo.
 """
 from __future__ import annotations
 
 import copy
+import os
 
 import numpy as np
 
 from .envs.exo_env import ExoAssistEnv
 
 
-def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, record: bool = False):
-    obs, _ = env.reset(seed=seed, options={"exo_mode": mode, "task": task, "nominal": True})
+def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, record: bool = False,
+                nominal: bool = True):
+    obs, _ = env.reset(seed=seed, options={"exo_mode": mode, "task": task, "nominal": nominal})
     effort, err, dtau, peak, ret = [], [], [], 0.0, 0.0
     trace = []
     while True:
@@ -38,14 +43,15 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
     return (out, trace) if record else out
 
 
-def no_exo_effort(cfg: dict, tasks, episodes: int = 3, seed0: int = 1000) -> dict:
+def no_exo_effort(cfg: dict, tasks, episodes: int = 3, seed0: int = 1000, nominal: bool = True) -> dict:
     """Effort of the pilot NOT wearing the exo (the ACE comparison); {} if no CAD exo is mounted."""
     if not (cfg.get("exo_hardware") or {}).get("enabled"):
         return {}
     cfg0 = copy.deepcopy(cfg)
     cfg0["exo_hardware"]["enabled"] = False
     env0 = ExoAssistEnv(cfg0, seed=0)
-    return {t: float(np.mean([run_episode(env0, None, t, "off", seed0 + i)["effort"] for i in range(episodes)]))
+    return {t: float(np.mean([run_episode(env0, None, t, "off", seed0 + i, nominal=nominal)["effort"]
+                              for i in range(episodes)]))
             for t in tasks}
 
 
@@ -63,3 +69,91 @@ def evaluate(env: ExoAssistEnv, policy, tasks, episodes: int = 3, seed0: int = 1
         agg["effort_reduction_pct"] = 100.0 * (1.0 - agg["effort"] / max(baseline[t], 1e-9))
         results[t] = agg
     return results, baseline
+
+
+def eval_score(results: dict, metric: str = "mean") -> float:
+    """Checkpoint-selection score from evaluate() results.
+    mean:  mean effort reduction - 100 * mean fail rate (the original rule)
+    worst: the same per task, worst task counts (a regression on one task can't hide)"""
+    per_task = [v["effort_reduction_pct"] - 100.0 * v["fail_rate"] for v in results.values()]
+    if metric == "worst":
+        return float(min(per_task))
+    mean_red = float(np.mean([v["effort_reduction_pct"] for v in results.values()]))
+    return mean_red - 100.0 * float(np.mean([v["fail_rate"] for v in results.values()]))
+
+
+def evaluate_checkpoint(cfg: dict, path: str, tasks, episodes: int, baseline=None):
+    """evaluate() for a saved checkpoint; runs in a background process (train.eval_async)."""
+    import torch
+
+    from .agents.td3 import TD3Agent
+    torch.set_num_threads(1)
+    agent = TD3Agent.load(path)
+    return evaluate(ExoAssistEnv(cfg, seed=0), lambda o: agent.act(o, 0.0), tasks, episodes, baseline=baseline)
+
+
+class PeriodicEval:
+    """Training-time evaluation, inline (default) or in one background process (async_=True).
+    Async: the evaluated weights are saved to a pending file that becomes best.pt if they win.
+    If an evaluation is still running when the next is due, the newest one waits in a queue of
+    one (an older queued one is dropped)."""
+
+    def __init__(self, cfg, eval_env, tasks, episodes, ckpt_dir, async_=False):
+        self.cfg, self.env, self.tasks, self.episodes, self.dir = cfg, eval_env, tasks, episodes, ckpt_dir
+        self.baseline, self.pending, self.queued, self.pool = None, None, None, None
+        if async_:
+            import multiprocessing
+            from concurrent.futures import ProcessPoolExecutor
+            self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+
+    def run(self, agent, step):
+        """Returns [(step, results, save_best)] finished now; save_best(path) writes best.pt."""
+        if self.pool is None:
+            res, self.baseline = evaluate(self.env, lambda o: agent.act(o, noise=0.0), self.tasks,
+                                          self.episodes, baseline=self.baseline)
+            return [(step, res, lambda path: agent.save(path, step))]
+        path = os.path.join(self.dir, f"eval_pending_{step}.pt")
+        agent.save(path, step)
+        if self.pending is None:
+            self._submit(step, path)
+        else:
+            if self.queued is not None:
+                print(f"[eval ] step {self.queued[0]}: dropped (evaluation falling behind; raise eval_every)")
+                os.remove(self.queued[1])
+            self.queued = (step, path)
+        return []
+
+    def _submit(self, step, path):
+        fut = self.pool.submit(evaluate_checkpoint, self.cfg, path, self.tasks, self.episodes, self.baseline)
+        self.pending = (step, path, fut)
+
+    def poll(self, wait=False):
+        """Finished async evaluations (none in inline mode)."""
+        out = []
+        while self.pending is not None and (wait or self.pending[2].done()):
+            step, path, fut = self.pending
+            self.pending = None
+            res, self.baseline = fut.result()
+            out.append((step, res, lambda best_path, src=path: os.replace(src, best_path)))
+            if self.queued is not None:
+                self._submit(*self.queued)
+                self.queued = None
+        return out
+
+    def discard(self, results):
+        """Delete pending files of async results that did not become best.pt."""
+        for step, _, _ in results:
+            p = os.path.join(self.dir, f"eval_pending_{step}.pt")
+            if os.path.exists(p):
+                os.remove(p)
+
+    def close(self):
+        if self.pool is not None:
+            self.pool.shutdown(wait=False, cancel_futures=True)
+        for item in (self.pending, self.queued):
+            if item is not None:
+                try:
+                    os.remove(item[1])
+                except OSError:                    # still being read by the worker
+                    pass
+        self.pending = self.queued = None
