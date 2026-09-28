@@ -1,0 +1,41 @@
+# MK1 FB900 exoskeleton (from the SolidWorks URDF export), mounted on the human model.
+# Paths are relative to this file's directory's parent (the repo root).
+urdf: assets/exo_mk1/MK1_FB900.urdf
+meshes: {hi: assets/exo_mk1/meshes_hi, lo: assets/exo_mk1/meshes_lo}
+
+# CAD frame -> human frame. Determined from the geometry: the back plate sits behind the legs,
+# legs point down. Human frame: x forward, y pilot's left, z up.
+cad_forward: -y
+cad_up: +z
+
+# Which URDF chain is on the PILOT'S left/right. The CAD names are from the viewer's side:
+# the "Right_*" links sit on the pilot's left. The loader verifies this against the geometry.
+legs:
+  l:
+    hip_joint: Right_UpperLeggs_Joint
+    knee_joint: Right_LowerLegs_Joint
+    thigh_links: [Right_UpperLegs_Link]
+    shank_links: [Right_LowerLegs_Link]
+  r:
+    hip_joint: Left_UpperLegs_Joint
+    knee_joint: Left_LowerLegs_Joint
+    thigh_links: [Left_UpperLegs_Link]
+    shank_links: [Left_LowerLegs_Link]
+
+# Everything that moves with the pelvis (the passive hip ab/adduction and rotation joints and
+# the width-adjust sliders are locked in this sagittal-plane model).
+pelvis_links: [Back_Plate_Link, Right_HChassie_Link, Right_Hip_Shaft_Link, Right_Hip_Cycloidal_Link,
+               Left_HChassie_Link, Left_Hip_Shaft_Link, Left_Hip_Cycloidal_Link]
+
+# Knee alignment. The CAD hip->knee axis distance (0.518 m) is longer than most pilots' thighs.
+#   align_knee: exo knee axis placed on the human knee (models a length-adjusted exo)
+#   rigid:      exo kept rigid as in CAD (knee axes misaligned; visual reference only)
+knee_mode: align_knee
+
+# Motor calibration for the real hardware (encoder reading at the human-zero pose, rad).
+# Signs are derived from the URDF joint axes at load time; see scripts/exo_info.py.
+motor_zero_offsets: {hip_l: 0.0, knee_l: 0.0, hip_r: 0.0, knee_r: 0.0}
+
+# From the URDF <limit effort>: 10 Nm, which looks like an exporter placeholder.
+# The torque limits actually used are exo.max_torque in the training config.
+urdf_effort_nm: 10

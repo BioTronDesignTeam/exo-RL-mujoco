@@ -1,0 +1,90 @@
+{
+  "control_dt": 0.01,
+  "exo_joints": [
+    "hip_l",
+    "knee_l",
+    "hip_r",
+    "knee_r"
+  ],
+  "observation": {
+    "history": 8,
+    "use_phase": true,
+    "include_prev_action": true
+  },
+  "exo": {
+    "joints": [
+      "hip_l",
+      "knee_l",
+      "hip_r",
+      "knee_r"
+    ],
+    "max_torque": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "action_scale": [
+      40,
+      40,
+      40,
+      40
+    ],
+    "rate_limit": 1500,
+    "direction": [
+      "both",
+      "both",
+      "both",
+      "both"
+    ],
+    "feedforward": "limb_gravity",
+    "alpha": 0.0
+  },
+  "limb": {
+    "thigh_mass": 11.24720914353767,
+    "thigh_len": 0.42874999999999996,
+    "thigh_com": 0.19097525209788002,
+    "shank_foot_mass": 7.15984179824086,
+    "shank_foot_com": 0.21415378237889834
+  },
+  "pilot": {
+    "height": 1.75,
+    "mass": 75.0
+  },
+  "obs_dim": 280,
+  "source": {
+    "run": "runs/demo",
+    "ckpt": "best.pt",
+    "algo": "td3"
+  },
+  "motor_map": {
+    "order": [
+      "hip_l",
+      "knee_l",
+      "hip_r",
+      "knee_r"
+    ],
+    "urdf_joints": [
+      "Right_UpperLeggs_Joint",
+      "Right_LowerLegs_Joint",
+      "Left_UpperLegs_Joint",
+      "Left_LowerLegs_Joint"
+    ],
+    "signs": [
+      1,
+      -1,
+      -1,
+      1
+    ],
+    "zero_offsets": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "exo_hardware": {
+    "spec": "configs/exo_mk1.yaml",
+    "total_mass_kg": 19.098206851908145
+  }
+}
