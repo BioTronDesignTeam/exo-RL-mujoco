@@ -17,7 +17,7 @@ python -m pytest                # 30 tests, ~30 s — confirms everything works
 ```
 
 - **Video recording** needs `imageio[ffmpeg]` (`pip install "imageio[ffmpeg]"`).
-- **macOS live viewer:** use `mjpython` instead of `python`.
+- **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 
 ---
@@ -58,7 +58,7 @@ Writes `runs/NAME/`:
 - `checkpoints/` (`best.pt`, `latest.pt` every `train.latest_every` steps, `step_N.pt`; written atomically)
 - `resume/` (snapshot for `--resume`)
 
-Training is headless (no window). Watch progress with `view.py --ckpt latest.pt` in another terminal.
+Training is headless (no window). Watch progress live with `watch_training.py` in another terminal.
 
 ### `scripts/pretrain_bc.py`: warm-start a policy by imitation
 
@@ -94,6 +94,26 @@ and prints teacher and BC effort per task. Continue with `train.py --init-from` 
 | `--config`, `--set` | | Same as `train.py` |
 
 It prints task, gait phase, human effort, and exo torque once per second. It collects no training data.
+
+### `scripts/watch_training.py`: watch a policy while it trains
+
+```bash
+python scripts/watch_training.py --run runs/mk1                                 # live viewer
+python scripts/watch_training.py --run runs/mk1 --record-dir runs/mk1/videos    # headless videos
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run PATH` | required | Run folder; polls `checkpoints/latest.pt` and reloads the policy when it changes |
+| `--poll S` | `10` | Seconds between checks |
+| `--tasks T [T ...]` | the run's training tasks | Tasks to cycle, one episode each |
+| `--camera {track,fixed}`, `--speed X` | `track`, `1.0` | As in `view.py` |
+| `--record-dir DIR` | — | No window: for each new checkpoint save `DIR/step_<N>_<task>.mp4` per task |
+| `--seconds N` | `8` | Video length per task (`--record-dir`) |
+| `--width`, `--height` | `720`, `528` | Video size |
+
+It prints the checkpoint step on each reload and the mean effort per episode, and shows step and
+task as a text overlay in the viewer. It waits if the run or checkpoint doesn't exist yet.
 
 ### `scripts/evaluate.py`: measure a trained policy
 
@@ -244,8 +264,8 @@ exo_rl/sim/       human + exo model, reference motions, human controller
 exo_rl/control/   observation + torque pipeline — shared with hardware, keep identical
 exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
 exo_rl/agents/    TD3 / DDPG learning algorithm
-exo_rl/*.py       evaluation, warm start (teacher + behavior cloning)
-scripts/          train, pretrain_bc, view, evaluate, export, exo_info
+exo_rl/*.py       evaluation, warm start (teacher + behavior cloning), viewing helpers
+scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
 tests/            30 tests

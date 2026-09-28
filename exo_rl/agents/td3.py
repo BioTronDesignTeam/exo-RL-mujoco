@@ -184,11 +184,13 @@ class TD3Agent:
 
     @classmethod
     def load(cls, path, device="cpu"):
+        """path: file path or file-like object. agent.step = env steps at save time (or None)."""
         ck = torch.load(path, map_location=device, weights_only=False)
         agent = cls(ck["obs_dim"], ck["act_dim"], ck["cfg"], device)
         for k in ("actor", "critic", "actor_t", "critic_t", "actor_opt", "critic_opt"):
             getattr(agent, k).load_state_dict(ck[k])
         agent.updates = ck["updates"]
+        agent.step = ck.get("step")
         if ck.get("actor_bc") is not None:
             agent.set_bc_reference()
             agent.actor_bc.load_state_dict(ck["actor_bc"])
