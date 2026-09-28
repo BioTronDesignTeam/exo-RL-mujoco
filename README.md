@@ -52,7 +52,7 @@ python -m deploy.run_hardware --export runs/mk1/export --sim   # deployment dry 
 
 Writes `runs/NAME/`:
 - `config.yaml`
-- `episodes.csv` (reward terms per episode)
+- `episodes.csv` (reward terms per episode, with `env_id`)
 - `eval.csv` (effort reduction per task)
 - `checkpoints/` (`best.pt`, `latest.pt`, `step_N.pt`)
 - `resume/` (snapshot for `--resume`)
@@ -140,6 +140,16 @@ python -m pytest tests/test_exo.py    # one file
 
 ---
 
+## Training faster
+
+**Parallel simulation.** `train.num_envs=N` runs N envs in worker processes and overlaps
+their simulation with the gradient updates. On CPU the updates dominate the cost, so pair
+it with `train.updates_per_step` < 1. The default (`num_envs=1`, `updates_per_step=1.0`)
+trains exactly as before. `--max-minutes` / `--resume` work as usual; with N > 1 training may
+stop mid-episode, and resumed envs get fresh seeds.
+
+---
+
 ## Tasks
 
 | Task | Moves | Trained by default | Notes |
@@ -165,6 +175,8 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 |---|---|
 | `agent.algo=ddpg` | DDPG instead of TD3 |
 | `train.total_steps=1000000` | Training length (a full run is ~1M steps) |
+| `train.num_envs=8` | Simulate in 8 parallel processes (see [Training faster](#training-faster)) |
+| `train.updates_per_step=0.25` | Gradient updates per collected transition (summed over envs) |
 | `exo.max_torque=[60,60,60,60]` | Actuator limits in Nm (hip_l, knee_l, hip_r, knee_r) |
 | `exo.alpha=0.5` | Add gravity-compensation feedforward under the policy |
 | `exo.direction=[flexion_only,both,flexion_only,both]` | One-way (cable) actuators |

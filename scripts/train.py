@@ -4,10 +4,11 @@
     python scripts/train.py --set agent.algo=ddpg --set train.total_steps=200000
     python scripts/train.py --name baseline --max-minutes 60      # stop cleanly, save snapshot
     python scripts/train.py --name baseline --resume               # continue from snapshot
+    python scripts/train.py --set train.num_envs=8 --set train.updates_per_step=0.25  # parallel
 
 Outputs in runs/<name>/:
     config.yaml        exact config used (needed for export/deploy)
-    episodes.csv       per-episode return, length, task, mean of every reward term
+    episodes.csv       per-episode return, length, task, env_id, mean of every reward term
     eval.csv           per-task effort reduction vs exo-off, tracking, torque stats
     checkpoints/       latest.pt, best.pt (by mean eval effort reduction), step_N.pt
     resume/            snapshot (agent, replay buffer, counters) for --resume
@@ -29,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
+from exo_rl.envs.vector import make_runner  # noqa: E402
 from exo_rl.evaluation import evaluate  # noqa: E402
 from exo_rl.utils import load_config, pick_device  # noqa: E402
 
@@ -76,16 +78,19 @@ def main():
     torch.manual_seed(seed)
     tr = cfg["train"]
     device = pick_device(tr.get("device", "auto"))
+    num_envs = int(tr.get("num_envs", 1))
+    updates_per_step = float(tr.get("updates_per_step", 1.0))
+    threads = configure_torch_threads(int(tr.get("torch_threads", 0)), num_envs)
 
-    env = ExoAssistEnv(cfg, seed=seed)
     eval_env = ExoAssistEnv(cfg, seed=seed + 1)
-    obs_dim, act_dim = env.observation_space.shape[0], env.action_space.shape[0]
+    obs_dim, act_dim = eval_env.observation_space.shape[0], eval_env.action_space.shape[0]
     agent = TD3Agent(obs_dim, act_dim, cfg["agent"], device)
     buf = ReplayBuffer(obs_dim, act_dim, int(cfg["agent"]["buffer_size"]))
     ep_log = CsvLog(os.path.join(run_dir, "episodes.csv"), append=args.resume)
     ev_log = CsvLog(os.path.join(run_dir, "eval.csv"), append=args.resume)
     tasks = cfg["tasks"]["names"]
-    print(f"[train] {agent.algo.upper()} on {device} | obs {obs_dim} act {act_dim} | run dir {run_dir}")
+    print(f"[train] {agent.algo.upper()} on {device} | obs {obs_dim} act {act_dim} | {num_envs} env(s), "
+          f"{updates_per_step:g} updates/step, {threads} torch threads | run dir {run_dir}")
 
     ep_i, best, baseline, start = 0, -np.inf, None, 1
     snap_dir = os.path.join(run_dir, "resume")
@@ -101,8 +106,8 @@ def main():
         start, ep_i, best = st["step"] + 1, st["episode"], st["best"]
         baseline = st.get("baseline")
         np.random.seed(seed + start)
-        env = ExoAssistEnv(cfg, seed=seed + start)
         print(f"[train] resumed at step {start} (buffer {len(buf)})")
+    runner = make_runner(cfg, num_envs, seed + (start if args.resume else 0))   # fresh seeds on resume
 
     def snapshot(step):
         os.makedirs(snap_dir, exist_ok=True)
@@ -115,67 +120,117 @@ def main():
                             "baseline": {k: float(v) for k, v in baseline.items()} if baseline else None}, f)
         print(f"[train] snapshot saved at step {step}; continue with --name {name} --resume")
 
-    obs, info = env.reset()
-    ep_ret, ep_len, ep_terms = 0.0, 0, defaultdict(float)
-    t0 = time.time()
-    upd_info = {"critic_loss": float("nan"), "q_mean": float("nan"), "actor_loss": float("nan")}
+    start_steps, total_steps = int(tr["start_steps"]), int(tr["total_steps"])
+    batch_size = int(cfg["agent"]["batch_size"])
     expl = float(cfg["agent"]["expl_noise"])
+    upd_info = {"critic_loss": float("nan"), "q_mean": float("nan"), "actor_loss": float("nan")}
+    upd_acc = 0.0
 
-    for step in range(start, int(tr["total_steps"]) + 1):
-        if step <= int(tr["start_steps"]):
-            action = env.action_space.sample()
-        else:
-            action = agent.act(obs, noise=expl)
-        obs2, r, term, trunc, inf = env.step(action)
-        buf.add(obs, action, r, obs2, term)
-        obs = obs2
-        ep_ret += r
-        ep_len += 1
-        for k, v in inf["reward_terms"].items():
-            ep_terms[k] += v
-
-        if step > int(tr["start_steps"]):
-            upd_info.update(agent.update(buf, int(cfg["agent"]["batch_size"])))
-
-        if term or trunc:
-            row = {"step": step, "episode": ep_i, "task": info["task"], "return": round(ep_ret, 3),
-                   "length": ep_len, "terminated": int(term), "reason": inf["terminated_reason"]}
-            row.update({f"mean_{k}": round(v / ep_len, 5) for k, v in ep_terms.items()})
-            row.update({k: round(v, 4) for k, v in upd_info.items()})
-            ep_log.write(row)
-            if ep_i % 10 == 0:
-                sps = (step - start + 1) / (time.time() - t0)
-                print(f"[train] step {step:>8d} ep {ep_i:>5d} ret {ep_ret:7.1f} len {ep_len:4d} "
-                      f"effort {row['mean_effort']:.3f} ({info['task']}) {sps:.0f} steps/s")
-            obs, info = env.reset()
-            ep_ret, ep_len, ep_terms = 0.0, 0, defaultdict(float)
-            ep_i += 1
-
-        if step % int(tr["eval_every"]) == 0:
-            policy = lambda o: agent.act(o, noise=0.0)  # noqa: E731
-            res, baseline = evaluate(eval_env, policy, tasks, int(tr["eval_episodes"]), baseline=baseline)
-            mean_red = float(np.mean([v["effort_reduction_pct"] for v in res.values()]))
-            fail = float(np.mean([v["fail_rate"] for v in res.values()]))
-            for t, v in res.items():
-                ev_log.write({"step": step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
-            print(f"[eval ] step {step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
-                  + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
-            agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"))
-            score = mean_red - 100.0 * fail
-            if score > best:
-                best = score
-                agent.save(os.path.join(run_dir, "checkpoints", "best.pt"))
-                print(f"[eval ] new best ({score:+.1f})")
-
-        if step % int(tr["save_every"]) == 0:
-            agent.save(os.path.join(run_dir, "checkpoints", f"step_{step}.pt"))
-
-        if args.max_minutes and (time.time() - t0) > 60 * args.max_minutes and (term or trunc):
-            snapshot(step)
+    def learn(n_collected):
+        """This iteration's share of gradient updates: updates_per_step per collected transition."""
+        nonlocal upd_acc
+        if n_collected <= start_steps:
             return
+        upd_acc += updates_per_step * num_envs
+        n_upd = int(upd_acc)
+        upd_acc -= n_upd
+        for _ in range(n_upd):
+            upd_info.update(agent.update(buf, batch_size))
+
+    step = start - 1                          # transitions collected so far (all envs)
+    obs, ep_task = runner.reset()
+    ep_ret, ep_len = np.zeros(num_envs), np.zeros(num_envs, int)
+    ep_terms = [defaultdict(float) for _ in range(num_envs)]
+    t0 = time.time()
+
+    try:
+        while step < total_steps:
+            if step + 1 <= start_steps:
+                actions = runner.sample_actions()        # random warm-up, independent per env
+            else:
+                actions = agent.act(obs, noise=expl)     # exploration noise drawn per env
+            runner.step_async(actions)
+            if runner.overlap:
+                learn(step)                              # envs simulate while we learn
+            obs2, trans = runner.step_wait()
+            prev, step = step, step + num_envs
+            for i, t in enumerate(trans):
+                buf.add(obs[i], actions[i], t.reward, t.next_obs, t.terminated)
+            if not runner.overlap:
+                learn(step)
+            obs = obs2
+
+            any_done = False
+            for i, t in enumerate(trans):
+                ep_ret[i] += t.reward
+                ep_len[i] += 1
+                for k, v in t.info["reward_terms"].items():
+                    ep_terms[i][k] += v
+                if not (t.terminated or t.truncated):
+                    continue
+                any_done = True
+                row = {"step": step, "episode": ep_i, "env_id": i, "task": ep_task[i],
+                       "return": round(float(ep_ret[i]), 3), "length": int(ep_len[i]),
+                       "terminated": int(t.terminated), "reason": t.info["terminated_reason"]}
+                row.update({f"mean_{k}": round(v / ep_len[i], 5) for k, v in ep_terms[i].items()})
+                row.update({k: round(v, 4) for k, v in upd_info.items()})
+                ep_log.write(row)
+                if ep_i % 10 == 0:
+                    sps = (step - start + 1) / (time.time() - t0)
+                    print(f"[train] step {step:>8d} ep {ep_i:>5d} ret {ep_ret[i]:7.1f} len {ep_len[i]:4d} "
+                          f"effort {row['mean_effort']:.3f} ({ep_task[i]}) {sps:.0f} steps/s")
+                ep_task[i] = t.reset_task
+                ep_ret[i], ep_len[i], ep_terms[i] = 0.0, 0, defaultdict(float)
+                ep_i += 1
+
+            if crossed(prev, step, int(tr["eval_every"])):
+                policy = lambda o: agent.act(o, noise=0.0)  # noqa: E731
+                res, baseline = evaluate(eval_env, policy, tasks, int(tr["eval_episodes"]), baseline=baseline)
+                mean_red = float(np.mean([v["effort_reduction_pct"] for v in res.values()]))
+                fail = float(np.mean([v["fail_rate"] for v in res.values()]))
+                for t, v in res.items():
+                    ev_log.write({"step": step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
+                print(f"[eval ] step {step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
+                      + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
+                agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"))
+                score = mean_red - 100.0 * fail
+                if score > best:
+                    best = score
+                    agent.save(os.path.join(run_dir, "checkpoints", "best.pt"))
+                    print(f"[eval ] new best ({score:+.1f})")
+
+            if crossed(prev, step, int(tr["save_every"])):
+                agent.save(os.path.join(run_dir, "checkpoints", f"step_{step}.pt"))
+
+            # One env stops at an episode boundary (as before); with several, mid-episode is fine.
+            if args.max_minutes and (time.time() - t0) > 60 * args.max_minutes and (runner.overlap or any_done):
+                snapshot(step)
+                return
+    except KeyboardInterrupt:
+        print("[train] interrupted; closing envs (no snapshot saved)")
+        runner.close(terminate=True)
+        runner = None
+        return
+    finally:
+        if runner is not None:
+            runner.close()
 
     agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"))
     print(f"[train] done in {(time.time() - t0) / 60:.1f} min")
+
+
+def crossed(prev: int, cur: int, every: int) -> bool:
+    """True if a multiple of `every` lies in (prev, cur]; step counts advance by num_envs."""
+    return cur // every > prev // every
+
+
+def configure_torch_threads(requested: int, num_envs: int) -> int:
+    """Leave cores for the env worker processes. 0 = auto; the single-env default is untouched."""
+    if requested <= 0 and num_envs > 1:
+        requested = max(1, min(torch.get_num_threads(), (os.cpu_count() or 2) - num_envs))
+    if requested > 0:
+        torch.set_num_threads(requested)
+    return torch.get_num_threads()
 
 
 if __name__ == "__main__":

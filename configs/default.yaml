@@ -107,3 +107,6 @@ train:
   eval_episodes: 5
   save_every: 50000
   device: auto
+  num_envs: 1                # parallel simulation processes (AsyncVectorEnv); 1 = in-process, as before
+  updates_per_step: 1.0      # gradient updates per collected transition, summed over envs
+  torch_threads: 0           # 0 = auto: torch default for 1 env, leaves cores for workers otherwise

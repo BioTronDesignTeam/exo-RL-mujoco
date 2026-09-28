@@ -92,11 +92,14 @@ class TD3Agent:
 
     @torch.no_grad()
     def act(self, obs, noise=0.0):
-        o = torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
-        a = self.actor(o).cpu().numpy()[0]
+        """obs: (obs_dim,) -> (act_dim,), or a batch (n, obs_dim) -> (n, act_dim)."""
+        o = torch.as_tensor(np.asarray(obs), dtype=torch.float32, device=self.device)
+        single = o.ndim == 1
+        a = self.actor(o.unsqueeze(0) if single else o).cpu().numpy()
         if noise > 0:
             a = a + np.random.normal(0, noise, size=a.shape)
-        return np.clip(a, -1.0, 1.0)
+        a = np.clip(a, -1.0, 1.0)
+        return a[0] if single else a
 
     def update(self, buf: ReplayBuffer, batch_size: int) -> dict:
         o, a, r, o2, nd = buf.sample(batch_size, self.device)

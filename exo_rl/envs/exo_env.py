@@ -13,6 +13,9 @@ exo_mode (reset option or constructor arg) is for evaluation baselines:
   "policy"       normal operation
   "off"          exo applies zero torque (human-alone baseline)
   "feedforward"  pipeline with action = 0 (hand-designed baseline only)
+
+lean_info=True (training) returns only the small info fields training needs
+(reward_terms, task, terminated_reason), so vector-env workers pickle little per step.
 """
 from __future__ import annotations
 
@@ -37,9 +40,10 @@ EXO_IN_HUMAN = [0, 1, 3, 4]      # exo joints (hip_l, knee_l, hip_r, knee_r) in 
 class ExoAssistEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, cfg: dict, seed: int | None = None, exo_mode: str = "policy"):
+    def __init__(self, cfg: dict, seed: int | None = None, exo_mode: str = "policy", lean_info: bool = False):
         super().__init__()
         self.cfg = cfg
+        self.lean_info = lean_info
         self.rng = np.random.default_rng(seed)
         self.exo_mode = exo_mode
         sim = cfg["sim"]
@@ -206,6 +210,10 @@ class ExoAssistEnv(gym.Env):
         self.sensors = self._read_sensors() if not unstable else self.sensors
         obs = self.obs_builder(self.sensors, self.prev_action)
         task, phase = self.ref.active(self.t)
+        reason = "unstable" if unstable else "fell" if fell else "tracking" if lost else ""
+        if self.lean_info:
+            return obs, float(reward), terminated, truncated, {
+                "reward_terms": terms, "task": task, "terminated_reason": reason}
         info = {
             "reward_terms": terms,
             "tau_human": tau_h_sum / self.frame_skip,
@@ -216,6 +224,6 @@ class ExoAssistEnv(gym.Env):
             "task": task,
             "phase": phase,
             "raw_sensors": self.sensors,
-            "terminated_reason": "unstable" if unstable else "fell" if fell else "tracking" if lost else "",
+            "terminated_reason": reason,
         }
         return obs, float(reward), terminated, truncated, info
