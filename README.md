@@ -49,12 +49,13 @@ python -m deploy.run_hardware --export runs/mk1/export --sim   # deployment dry 
 | `--set KEY=VALUE` | — | Override any config value (repeatable) |
 | `--max-minutes N` | — | Stop after N minutes and save a snapshot |
 | `--resume` | off | Continue `runs/NAME/` from its snapshot |
+| `--init-from FILE` | — | Start actor + critic from a checkpoint (fresh optimizers, empty buffer); see [Training faster](#training-faster) |
 
 Writes `runs/NAME/`:
 - `config.yaml`
 - `episodes.csv` (reward terms per episode, with `env_id`)
 - `eval.csv` (effort reduction per task)
-- `checkpoints/` (`best.pt`, `latest.pt`, `step_N.pt`)
+- `checkpoints/` (`best.pt`, `latest.pt` every `train.latest_every` steps, `step_N.pt`; written atomically)
 - `resume/` (snapshot for `--resume`)
 
 Training is headless (no window). Watch progress with `view.py --ckpt latest.pt` in another terminal.
@@ -148,6 +149,19 @@ it with `train.updates_per_step` < 1. The default (`num_envs=1`, `updates_per_st
 trains exactly as before. `--max-minutes` / `--resume` work as usual; with N > 1 training may
 stop mid-episode, and resumed envs get fresh seeds.
 
+**Fine-tune instead of restarting.** After a config change (reward weights, torque limits,
+randomization), `--init-from runs/OLD/checkpoints/best.pt` starts from the old actor and
+critic. Observation settings and `agent.hidden` must match; otherwise it exits with an error.
+
+**Cheaper settings while iterating** (compare final results before adopting them):
+
+| Override | Effect |
+|---|---|
+| `train.eval_every=50000` / `train.eval_episodes=2` | Evaluation takes about 10–15% of training time, more as training gets faster |
+| `agent.hidden=[128,128]` | Roughly 3× cheaper updates; check that final effort holds up |
+| `agent.batch_size=512` | Nearly free on a GPU; on CPU cost grows with batch size |
+| `"tasks.names=[squat]"` | Train on fewer tasks while tuning, then fine-tune on all with `--init-from` |
+
 ---
 
 ## Tasks
@@ -177,6 +191,7 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 | `train.total_steps=1000000` | Training length (a full run is ~1M steps) |
 | `train.num_envs=8` | Simulate in 8 parallel processes (see [Training faster](#training-faster)) |
 | `train.updates_per_step=0.25` | Gradient updates per collected transition (summed over envs) |
+| `train.latest_every=5000` | How often `latest.pt` is written |
 | `exo.max_torque=[60,60,60,60]` | Actuator limits in Nm (hip_l, knee_l, hip_r, knee_r) |
 | `exo.alpha=0.5` | Add gravity-compensation feedforward under the policy |
 | `exo.direction=[flexion_only,both,flexion_only,both]` | One-way (cable) actuators |

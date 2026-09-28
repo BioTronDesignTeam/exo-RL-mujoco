@@ -5,12 +5,14 @@
     python scripts/train.py --name baseline --max-minutes 60      # stop cleanly, save snapshot
     python scripts/train.py --name baseline --resume               # continue from snapshot
     python scripts/train.py --set train.num_envs=8 --set train.updates_per_step=0.25  # parallel
+    python scripts/train.py --name ft --init-from runs/baseline/checkpoints/best.pt   # fine-tune
 
 Outputs in runs/<name>/:
     config.yaml        exact config used (needed for export/deploy)
     episodes.csv       per-episode return, length, task, env_id, mean of every reward term
     eval.csv           per-task effort reduction vs exo-off, tracking, torque stats
-    checkpoints/       latest.pt, best.pt (by mean eval effort reduction), step_N.pt
+    checkpoints/       latest.pt (every train.latest_every steps), best.pt (by mean eval effort
+                       reduction), step_N.pt; all written atomically (temp file + rename)
     resume/            snapshot (agent, replay buffer, counters) for --resume
 """
 from __future__ import annotations
@@ -32,7 +34,7 @@ from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
 from exo_rl.evaluation import evaluate  # noqa: E402
-from exo_rl.utils import load_config, pick_device  # noqa: E402
+from exo_rl.utils import atomic_write, load_config, pick_device  # noqa: E402
 
 
 class CsvLog:
@@ -61,6 +63,8 @@ def main():
     ap.add_argument("--set", action="append", default=[], help="override, e.g. agent.algo=ddpg")
     ap.add_argument("--resume", action="store_true", help="continue runs/<name> from its snapshot")
     ap.add_argument("--max-minutes", type=float, default=None, help="stop and snapshot after this long")
+    ap.add_argument("--init-from", default=None,
+                    help="start actor/critic (+targets) from this checkpoint; fresh optimizers, empty buffer")
     args = ap.parse_args()
 
     name = args.name or time.strftime("run_%Y%m%d_%H%M%S")
@@ -94,6 +98,12 @@ def main():
 
     ep_i, best, baseline, start = 0, -np.inf, None, 1
     snap_dir = os.path.join(run_dir, "resume")
+    if args.init_from and not args.resume:
+        try:
+            agent.init_from(args.init_from)
+        except ValueError as e:
+            sys.exit(f"[train] error: {e}")
+        print(f"[train] initialized actor/critic from {args.init_from}")
     if args.resume:
         agent = TD3Agent.load(os.path.join(snap_dir, "agent.pt"), device)
         data = np.load(os.path.join(snap_dir, "buffer.npz"))
@@ -113,11 +123,19 @@ def main():
         os.makedirs(snap_dir, exist_ok=True)
         agent.save(os.path.join(snap_dir, "agent.pt"))
         n = len(buf)
-        np.savez(os.path.join(snap_dir, "buffer.npz"), n=n, ptr=buf.ptr, full=buf.full,
-                 **{k: getattr(buf, k)[:n] for k in ("obs", "act", "rew", "next_obs", "not_done")})
-        with open(os.path.join(snap_dir, "state.yaml"), "w") as f:
-            yaml.safe_dump({"step": step, "episode": ep_i, "best": float(best),
-                            "baseline": {k: float(v) for k, v in baseline.items()} if baseline else None}, f)
+
+        def write_buffer(tmp):
+            with open(tmp, "wb") as f:
+                np.savez(f, n=n, ptr=buf.ptr, full=buf.full,
+                         **{k: getattr(buf, k)[:n] for k in ("obs", "act", "rew", "next_obs", "not_done")})
+
+        def write_state(tmp):
+            with open(tmp, "w") as f:
+                yaml.safe_dump({"step": step, "episode": ep_i, "best": float(best),
+                                "baseline": {k: float(v) for k, v in baseline.items()} if baseline else None}, f)
+
+        atomic_write(os.path.join(snap_dir, "buffer.npz"), write_buffer)
+        atomic_write(os.path.join(snap_dir, "state.yaml"), write_state)     # last: marks a complete snapshot
         print(f"[train] snapshot saved at step {step}; continue with --name {name} --resume")
 
     start_steps, total_steps = int(tr["start_steps"]), int(tr["total_steps"])
@@ -192,15 +210,18 @@ def main():
                     ev_log.write({"step": step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
                 print(f"[eval ] step {step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
                       + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
-                agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"))
+                agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
                 score = mean_red - 100.0 * fail
                 if score > best:
                     best = score
-                    agent.save(os.path.join(run_dir, "checkpoints", "best.pt"))
+                    agent.save(os.path.join(run_dir, "checkpoints", "best.pt"), step)
                     print(f"[eval ] new best ({score:+.1f})")
 
+            elif crossed(prev, step, int(tr.get("latest_every", 5000))):
+                agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
+
             if crossed(prev, step, int(tr["save_every"])):
-                agent.save(os.path.join(run_dir, "checkpoints", f"step_{step}.pt"))
+                agent.save(os.path.join(run_dir, "checkpoints", f"step_{step}.pt"), step)
 
             # One env stops at an episode boundary (as before); with several, mid-episode is fine.
             if args.max_minutes and (time.time() - t0) > 60 * args.max_minutes and (runner.overlap or any_done):
@@ -215,7 +236,7 @@ def main():
         if runner is not None:
             runner.close()
 
-    agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"))
+    agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
     print(f"[train] done in {(time.time() - t0) / 60:.1f} min")
 
 

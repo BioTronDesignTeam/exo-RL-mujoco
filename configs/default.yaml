@@ -105,6 +105,7 @@ train:
   start_steps: 10000         # random actions before learning starts
   eval_every: 20000
   eval_episodes: 5
+  latest_every: 5000         # write checkpoints/latest.pt this often (also after every eval)
   save_every: 50000
   device: auto
   num_envs: 1                # parallel simulation processes (AsyncVectorEnv); 1 = in-process, as before

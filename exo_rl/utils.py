@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import os
+import time
 
 import yaml
 
@@ -28,3 +30,17 @@ def pick_device(name: str = "auto") -> str:
 
 def deepcopy_cfg(cfg: dict) -> dict:
     return copy.deepcopy(cfg)
+
+
+def atomic_write(path: str, write) -> None:
+    """write(tmp_path), then rename over `path`, so readers never see a partial file.
+    On Windows the rename fails while another process has `path` open; retry briefly."""
+    tmp = f"{path}.tmp"
+    write(tmp)
+    for _ in range(50):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.1)
+    os.replace(tmp, path)

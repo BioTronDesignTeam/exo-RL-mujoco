@@ -12,6 +12,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..utils import atomic_write
+
 
 def mlp(inp, out, hidden, out_act=None):
     layers, d = [], inp
@@ -131,13 +133,33 @@ class TD3Agent:
             info["actor_loss"] = actor_loss.item()
         return info
 
-    def save(self, path):
-        torch.save({
+    def save(self, path, step: int | None = None):
+        """Atomic write; `step` (env steps, optional) is metadata for tools like watch_training."""
+        ck = {
             "actor": self.actor.state_dict(), "critic": self.critic.state_dict(),
             "actor_t": self.actor_t.state_dict(), "critic_t": self.critic_t.state_dict(),
             "actor_opt": self.actor_opt.state_dict(), "critic_opt": self.critic_opt.state_dict(),
             "cfg": self.cfg, "obs_dim": self.obs_dim, "act_dim": self.act_dim, "updates": self.updates,
-        }, path)
+            "step": step,
+        }
+        atomic_write(str(path), lambda tmp: torch.save(ck, tmp))
+
+    def init_from(self, path):
+        """Copy actor, critic and their targets from a checkpoint (e.g. bc.pt) to fine-tune.
+        Optimizers stay fresh. Raises ValueError if the network shapes don't match."""
+        ck = torch.load(path, map_location=self.device, weights_only=False)
+        if (ck["obs_dim"], ck["act_dim"]) != (self.obs_dim, self.act_dim):
+            raise ValueError(
+                f"--init-from {path}: checkpoint has obs {ck['obs_dim']} / act {ck['act_dim']}, but this "
+                f"config gives obs {self.obs_dim} / act {self.act_dim}. The `observation` settings "
+                f"(history, use_phase, include_prev_action) must match the checkpoint's.")
+        try:
+            for k in ("actor", "critic", "actor_t", "critic_t"):
+                getattr(self, k).load_state_dict(ck[k])
+        except RuntimeError as e:
+            raise ValueError(f"--init-from {path}: network shapes differ (agent.hidden / agent.algo must "
+                             f"match the checkpoint's: hidden={ck['cfg'].get('hidden')}, "
+                             f"algo={ck['cfg'].get('algo')}).\n{e}") from None
 
     @classmethod
     def load(cls, path, device="cpu"):
