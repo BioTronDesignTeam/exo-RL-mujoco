@@ -88,7 +88,7 @@ It prints task, gait phase, human effort, and exo torque once per second. It col
 | `--ckpt FILE` | `best.pt` | Checkpoint |
 | `--episodes N` | `3` | Episodes per task and mode |
 
-It compares exo **off / feedforward / policy**, plus **not wearing the exo**, which is the ACE comparison.
+It compares exo **off / policy**, plus **not wearing the exo**, which is the ACE comparison.
 Output goes to `runs/NAME/eval_<ckpt>/`:
 - `summary.csv`
 - `effort_by_task.png`

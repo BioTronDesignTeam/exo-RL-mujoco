@@ -1,4 +1,4 @@
-"""Evaluate a trained policy against the exo-off and feedforward-only baselines.
+"""Evaluate a trained policy against the exo-off and not-wearing-the-exo baselines.
 
     python scripts/evaluate.py --run runs/demo                 # uses best.pt
     python scripts/evaluate.py --run runs/demo --ckpt latest.pt --episodes 5
@@ -31,7 +31,7 @@ from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.evaluation import run_episode  # noqa: E402
 from exo_rl.utils import load_config  # noqa: E402
 
-MODES = ["off", "feedforward", "policy"]
+MODES = ["off", "policy"]     # feedforward-only stays available in the env / view.py --mode
 
 
 def phase_average(trace, key, idx, bins=50, skip=100):
