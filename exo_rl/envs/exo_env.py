@@ -15,7 +15,11 @@ exo_mode (reset option or constructor arg) is for evaluation baselines:
   "feedforward"  pipeline with action = 0 (hand-designed baseline only)
 
 lean_info=True (training) returns only the small info fields training needs
-(reward_terms, task, terminated_reason), so vector-env workers pickle little per step.
+(reward_terms, task, terminated_reason, tau_needed), so vector-env workers pickle little.
+
+info["tau_needed"] (also self.tau_needed) is the torque the human needed at hip_l, knee_l,
+hip_r, knee_r before offloading any exo torque, averaged over the control step. It is
+privileged (sim-only) information for the warm-start teacher (exo_rl/warmstart.py).
 """
 from __future__ import annotations
 
@@ -148,6 +152,7 @@ class ExoAssistEnv(gym.Env):
         self.tau_cmd_prev = np.zeros(4)
         self.human_felt_exo = np.zeros(6)
         self.latency = deque([np.zeros(4)] * ep.latency_steps)
+        self.tau_needed = np.zeros(4)
         self.sensors = self._read_sensors()
         obs = self.obs_builder(self.sensors, self.prev_action)
         return obs, {"task": self.ref.name, "params": ep}
@@ -175,6 +180,7 @@ class ExoAssistEnv(gym.Env):
         dt = m.opt.timestep
         effort_sq = np.zeros(6)
         tau_h_sum = np.zeros(6)
+        tau_needed_sum = np.zeros(6)
         resid_sum = np.zeros(3)
         for k in range(self.frame_skip):
             ts = self.t + k * dt
@@ -187,8 +193,10 @@ class ExoAssistEnv(gym.Env):
             mujoco.mj_step(m, d)
             effort_sq += (tau_h / self.human.tau_max) ** 2
             tau_h_sum += tau_h
+            tau_needed_sum += self.human.tau_needed
             resid_sum += np.abs(tau_res)
         self.human_felt_exo = tau_exo_h          # human reacts one control step later
+        self.tau_needed = tau_needed_sum[EXO_IN_HUMAN] / self.frame_skip
         self.t += self.control_dt
         self.steps += 1
 
@@ -213,7 +221,7 @@ class ExoAssistEnv(gym.Env):
         reason = "unstable" if unstable else "fell" if fell else "tracking" if lost else ""
         if self.lean_info:
             return obs, float(reward), terminated, truncated, {
-                "reward_terms": terms, "task": task, "terminated_reason": reason}
+                "reward_terms": terms, "task": task, "terminated_reason": reason, "tau_needed": self.tau_needed}
         info = {
             "reward_terms": terms,
             "tau_human": tau_h_sum / self.frame_skip,
@@ -224,6 +232,7 @@ class ExoAssistEnv(gym.Env):
             "task": task,
             "phase": phase,
             "raw_sensors": self.sensors,
+            "tau_needed": self.tau_needed,
             "terminated_reason": reason,
         }
         return obs, float(reward), terminated, truncated, info

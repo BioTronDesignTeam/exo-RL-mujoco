@@ -60,6 +60,20 @@ Writes `runs/NAME/`:
 
 Training is headless (no window). Watch progress with `view.py --ckpt latest.pt` in another terminal.
 
+### `scripts/pretrain_bc.py`: warm-start a policy by imitation
+
+| Flag | Default | Description |
+|---|---|---|
+| `--name NAME` | timestamp | Run folder: `runs/NAME/` |
+| `--steps N` | `200000` | Dataset size (transitions) |
+| `--epochs N` | `warmstart.epochs` | BC epochs after each collection round |
+| `--teacher-fraction K` | `warmstart.teacher_fraction` | Share of the human's needed torque the teacher supplies |
+| `--config`, `--set` | | Same as `train.py` |
+
+A privileged teacher (the sim knows the torque the human needs) is imitated from normal sensor
+observations, with DAgger-style collection in parallel envs. It writes `runs/NAME/checkpoints/bc.pt`
+and prints teacher and BC effort per task. Continue with `train.py --init-from` (see [Training faster](#training-faster)).
+
 ### `scripts/view.py`: watch the simulation or record a video
 
 | Flag | Default | Description |
@@ -153,6 +167,19 @@ stop mid-episode, and resumed envs get fresh seeds.
 randomization), `--init-from runs/OLD/checkpoints/best.pt` starts from the old actor and
 critic. Observation settings and `agent.hidden` must match; otherwise it exits with an error.
 
+**Warm start: teacher, then behavior cloning, then RL.** Instead of starting RL from a random policy:
+
+```bash
+python scripts/pretrain_bc.py --name bc                       # teacher -> BC actor (bc.pt)
+python scripts/train.py --name ws --config runs/bc/config.yaml --init-from runs/bc/checkpoints/bc.pt
+```
+
+With `--init-from`, the `start_steps` warm-up uses the loaded policy (plus exploration noise)
+instead of random actions. Only the critic learns for `agent.actor_freeze_steps`. After that the
+actor loss is `-Q/mean|Q| + w·‖π − π_init‖²`, with `w = agent.bc_weight` decaying to 0 over
+`agent.bc_decay_steps`, so the untrained critic can't wreck the initial policy. These safeguards
+are off unless `--init-from` is used.
+
 **Cheaper settings while iterating** (compare final results before adopting them):
 
 | Override | Effect |
@@ -201,6 +228,8 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 | `tasks.data_dir=data/motions` | Use recorded motion CSVs |
 | `randomization.enabled=false` | Nominal pilot every episode |
 | `reward.w_effort=3.0` | Weight on human effort |
+| `warmstart.teacher_fraction=0.3` | Warm-start teacher strength (`pretrain_bc.py`) |
+| `agent.bc_weight=2.5` | Pull toward the initial policy when fine-tuning (`--init-from` only) |
 
 All settings are commented in `configs/default.yaml`. The exo itself is defined in `configs/exo_mk1.yaml`.
 
@@ -213,9 +242,10 @@ configs/          default.yaml (all settings), exo_mk1.yaml (your exo)
 assets/exo_mk1/   MuJoCo-ready URDF + meshes (hi = viewing, lo = training)
 exo_rl/sim/       human + exo model, reference motions, human controller
 exo_rl/control/   observation + torque pipeline — shared with hardware, keep identical
-exo_rl/envs/      environment, reward, randomization
+exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
 exo_rl/agents/    TD3 / DDPG learning algorithm
-scripts/          train, view, evaluate, export, exo_info
+exo_rl/*.py       evaluation, warm start (teacher + behavior cloning)
+scripts/          train, pretrain_bc, view, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
 tests/            30 tests

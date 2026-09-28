@@ -6,6 +6,8 @@ Evaluation uses nominal (non-randomized) parameters and fixed seeds so runs are 
 """
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 
 from .envs.exo_env import ExoAssistEnv
@@ -34,6 +36,17 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
         "peak_exo_torque": peak, "smoothness": float(np.mean(dtau)),
     }
     return (out, trace) if record else out
+
+
+def no_exo_effort(cfg: dict, tasks, episodes: int = 3, seed0: int = 1000) -> dict:
+    """Effort of the pilot NOT wearing the exo (the ACE comparison); {} if no CAD exo is mounted."""
+    if not (cfg.get("exo_hardware") or {}).get("enabled"):
+        return {}
+    cfg0 = copy.deepcopy(cfg)
+    cfg0["exo_hardware"]["enabled"] = False
+    env0 = ExoAssistEnv(cfg0, seed=0)
+    return {t: float(np.mean([run_episode(env0, None, t, "off", seed0 + i)["effort"] for i in range(episodes)]))
+            for t in tasks}
 
 
 def evaluate(env: ExoAssistEnv, policy, tasks, episodes: int = 3, seed0: int = 1000, baseline=None):

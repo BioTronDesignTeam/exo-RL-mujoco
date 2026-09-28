@@ -6,6 +6,11 @@
     python scripts/train.py --name baseline --resume               # continue from snapshot
     python scripts/train.py --set train.num_envs=8 --set train.updates_per_step=0.25  # parallel
     python scripts/train.py --name ft --init-from runs/baseline/checkpoints/best.pt   # fine-tune
+    python scripts/train.py --name ws --init-from runs/bc/checkpoints/bc.pt   # after pretrain_bc.py
+
+With --init-from, the start_steps warm-up uses the initialized policy (+ exploration noise)
+instead of random actions, and agent.actor_freeze_steps / bc_weight / bc_decay_steps protect
+the initial policy from the still-untrained critic (see exo_rl/agents/td3.py).
 
 Outputs in runs/<name>/:
     config.yaml        exact config used (needed for export/deploy)
@@ -34,7 +39,7 @@ from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
 from exo_rl.evaluation import evaluate  # noqa: E402
-from exo_rl.utils import atomic_write, load_config, pick_device  # noqa: E402
+from exo_rl.utils import atomic_write, configure_torch_threads, load_config, pick_device  # noqa: E402
 
 
 class CsvLog:
@@ -98,12 +103,15 @@ def main():
 
     ep_i, best, baseline, start = 0, -np.inf, None, 1
     snap_dir = os.path.join(run_dir, "resume")
-    if args.init_from and not args.resume:
+    init_from = args.init_from
+    if init_from and not args.resume:
         try:
-            agent.init_from(args.init_from)
+            agent.init_from(init_from)
         except ValueError as e:
             sys.exit(f"[train] error: {e}")
-        print(f"[train] initialized actor/critic from {args.init_from}")
+        if float(cfg["agent"].get("bc_weight", 0.0)) > 0:
+            agent.set_bc_reference()
+        print(f"[train] initialized actor/critic from {init_from}")
     if args.resume:
         agent = TD3Agent.load(os.path.join(snap_dir, "agent.pt"), device)
         data = np.load(os.path.join(snap_dir, "buffer.npz"))
@@ -115,6 +123,7 @@ def main():
             st = yaml.safe_load(f)
         start, ep_i, best = st["step"] + 1, st["episode"], st["best"]
         baseline = st.get("baseline")
+        init_from = st.get("init_from")         # keeps the warm-start schedule on resume
         np.random.seed(seed + start)
         print(f"[train] resumed at step {start} (buffer {len(buf)})")
     runner = make_runner(cfg, num_envs, seed + (start if args.resume else 0))   # fresh seeds on resume
@@ -131,7 +140,7 @@ def main():
 
         def write_state(tmp):
             with open(tmp, "w") as f:
-                yaml.safe_dump({"step": step, "episode": ep_i, "best": float(best),
+                yaml.safe_dump({"step": step, "episode": ep_i, "best": float(best), "init_from": init_from,
                                 "baseline": {k: float(v) for k, v in baseline.items()} if baseline else None}, f)
 
         atomic_write(os.path.join(snap_dir, "buffer.npz"), write_buffer)
@@ -143,6 +152,15 @@ def main():
     expl = float(cfg["agent"]["expl_noise"])
     upd_info = {"critic_loss": float("nan"), "q_mean": float("nan"), "actor_loss": float("nan")}
     upd_acc = 0.0
+    # Warm-start safeguards, in env steps after learning starts; all off without --init-from.
+    ag = cfg["agent"]
+    freeze = int(ag.get("actor_freeze_steps", 0)) if init_from else 0
+    bc_w0 = float(ag.get("bc_weight", 0.0)) if init_from else 0.0
+    bc_decay = int(ag.get("bc_decay_steps", 0)) if init_from else 0
+    if init_from:
+        upd_info["bc_weight"] = bc_w0
+        print(f"[train] warm start: actor frozen for {freeze} steps, then BC weight {bc_w0:g} "
+              f"-> 0 over {bc_decay} steps; start_steps collected with the initial policy")
 
     def learn(n_collected):
         """This iteration's share of gradient updates: updates_per_step per collected transition."""
@@ -152,8 +170,12 @@ def main():
         upd_acc += updates_per_step * num_envs
         n_upd = int(upd_acc)
         upd_acc -= n_upd
+        u = n_collected - start_steps - freeze          # steps since the actor was unfrozen
+        bc_w = bc_w0 * min(1.0, max(0.0, 1.0 - u / bc_decay)) if bc_decay > 0 else bc_w0
         for _ in range(n_upd):
-            upd_info.update(agent.update(buf, batch_size))
+            upd_info.update(agent.update(buf, batch_size, actor_frozen=u <= 0, bc_weight=bc_w))
+        if init_from:
+            upd_info["bc_weight"] = bc_w
 
     step = start - 1                          # transitions collected so far (all envs)
     obs, ep_task = runner.reset()
@@ -163,7 +185,7 @@ def main():
 
     try:
         while step < total_steps:
-            if step + 1 <= start_steps:
+            if step + 1 <= start_steps and not init_from:
                 actions = runner.sample_actions()        # random warm-up, independent per env
             else:
                 actions = agent.act(obs, noise=expl)     # exploration noise drawn per env
@@ -243,15 +265,6 @@ def main():
 def crossed(prev: int, cur: int, every: int) -> bool:
     """True if a multiple of `every` lies in (prev, cur]; step counts advance by num_envs."""
     return cur // every > prev // every
-
-
-def configure_torch_threads(requested: int, num_envs: int) -> int:
-    """Leave cores for the env worker processes. 0 = auto; the single-env default is untouched."""
-    if requested <= 0 and num_envs > 1:
-        requested = max(1, min(torch.get_num_threads(), (os.cpu_count() or 2) - num_envs))
-    if requested > 0:
-        torch.set_num_threads(requested)
-    return torch.get_num_threads()
 
 
 if __name__ == "__main__":

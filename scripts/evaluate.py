@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from exo_rl.agents.td3 import TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
-from exo_rl.evaluation import run_episode  # noqa: E402
+from exo_rl.evaluation import no_exo_effort, run_episode  # noqa: E402
 from exo_rl.utils import load_config  # noqa: E402
 
 MODES = ["off", "policy"]     # feedforward-only stays available in the env / view.py --mode
@@ -57,14 +57,7 @@ def main():
     out_dir = os.path.join(args.run, f"eval_{os.path.splitext(args.ckpt)[0]}")
     os.makedirs(out_dir, exist_ok=True)
 
-    no_exo = {}
-    if (cfg.get("exo_hardware") or {}).get("enabled"):
-        import copy
-        cfg0 = copy.deepcopy(cfg)
-        cfg0["exo_hardware"]["enabled"] = False
-        env0 = ExoAssistEnv(cfg0, seed=0)
-        no_exo = {t: float(np.mean([run_episode(env0, None, t, "off", seed=2000 + i)["effort"]
-                                    for i in range(args.episodes)])) for t in tasks}
+    no_exo = no_exo_effort(cfg, tasks, args.episodes, seed0=2000)
 
     rows, traces = [], {}
     for task in tasks:

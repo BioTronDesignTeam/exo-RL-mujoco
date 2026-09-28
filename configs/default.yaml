@@ -99,6 +99,10 @@ agent:
   noise_clip: 0.5
   policy_delay: 2
   expl_noise: 0.1
+  # Warm-start safeguards, used only with train.py --init-from (all off otherwise):
+  actor_freeze_steps: 20000  # only the critic learns for this many steps after start_steps
+  bc_weight: 2.5             # actor loss = -Q/mean|Q| + w*||pi - pi_init||^2 (TD3+BC style) ...
+  bc_decay_steps: 200000     # ... with w decaying linearly to 0 over this many steps after the freeze
 
 train:
   total_steps: 1000000
@@ -111,3 +115,14 @@ train:
   num_envs: 1                # parallel simulation processes (AsyncVectorEnv); 1 = in-process, as before
   updates_per_step: 1.0      # gradient updates per collected transition, summed over envs
   torch_threads: 0           # 0 = auto: torch default for 1 env, leaves cores for workers otherwise
+
+warmstart:                   # teacher -> behavior cloning (scripts/pretrain_bc.py) -> train.py --init-from
+  teacher_fraction: 0.3      # teacher supplies this fraction of the torque the human needs (sim-only info)
+  label_offset_steps: 1      # label obs_t with tau_needed this many steps later (teaches anticipation)
+  rounds: 4                  # collection rounds; round r executes r/rounds BC policy + rest teacher (DAgger)
+  collect_noise: 0.05        # Gaussian noise on executed actions during collection
+  epochs: 10                 # BC epochs over the aggregated dataset after each round
+  batch_size: 256
+  lr: 0.001
+  num_envs: 0                # collection processes; 0 = one per CPU core (max 8)
+  eval_episodes: 2           # per task, for the teacher / BC report

@@ -2,6 +2,12 @@
 
 algo: td3   twin critics, clipped double-Q, target policy smoothing, delayed actor updates
 algo: ddpg  single critic, no smoothing, actor updated every step
+
+Fine-tuning from a warm start (train.py --init-from) can regularize the actor toward a frozen
+copy of its initial weights (pi_bc), as in TD3+BC (Fujimoto & Gu, 2021):
+    actor_loss = -Q(s, pi(s)) / mean|Q| + w * ||pi(s) - pi_bc(s)||^2
+and can freeze the actor while the fresh critic catches up. Without set_bc_reference() the
+loss is plain -Q, exactly as before.
 """
 from __future__ import annotations
 
@@ -91,6 +97,11 @@ class TD3Agent:
         self.policy_delay = int(cfg["policy_delay"]) if twin else 1
         self.obs_dim, self.act_dim = obs_dim, act_dim
         self.updates = 0
+        self.actor_bc = None             # frozen reference policy for BC regularization
+
+    def set_bc_reference(self):
+        """Freeze a copy of the current actor as pi_bc (normalizes the Q term from now on)."""
+        self.actor_bc = copy.deepcopy(self.actor).requires_grad_(False)
 
     @torch.no_grad()
     def act(self, obs, noise=0.0):
@@ -103,7 +114,7 @@ class TD3Agent:
         a = np.clip(a, -1.0, 1.0)
         return a[0] if single else a
 
-    def update(self, buf: ReplayBuffer, batch_size: int) -> dict:
+    def update(self, buf: ReplayBuffer, batch_size: int, actor_frozen: bool = False, bc_weight: float = 0.0) -> dict:
         o, a, r, o2, nd = buf.sample(batch_size, self.device)
         with torch.no_grad():
             a2 = self.actor_t(o2)
@@ -122,15 +133,25 @@ class TD3Agent:
         info = {"critic_loss": critic_loss.item(), "q_mean": q1.mean().item()}
         self.updates += 1
         if self.updates % self.policy_delay == 0:
-            actor_loss = -self.critic(o, self.actor(o))[0].mean()
-            self.actor_opt.zero_grad()
-            actor_loss.backward()
-            self.actor_opt.step()
+            if not actor_frozen:
+                pi = self.actor(o)
+                q = self.critic(o, pi)[0]
+                if self.actor_bc is None:
+                    actor_loss = -q.mean()
+                else:
+                    actor_loss = -q.mean() / q.abs().mean().detach().clamp_min(1e-6)
+                    if bc_weight > 0:
+                        with torch.no_grad():
+                            a_bc = self.actor_bc(o)
+                        actor_loss = actor_loss + bc_weight * ((pi - a_bc) ** 2).sum(-1).mean()
+                self.actor_opt.zero_grad()
+                actor_loss.backward()
+                self.actor_opt.step()
+                info["actor_loss"] = actor_loss.item()
             with torch.no_grad():
                 for net, tgt in ((self.actor, self.actor_t), (self.critic, self.critic_t)):
                     for p, pt in zip(net.parameters(), tgt.parameters()):
                         pt.mul_(1 - self.tau).add_(self.tau * p)
-            info["actor_loss"] = actor_loss.item()
         return info
 
     def save(self, path, step: int | None = None):
@@ -140,7 +161,7 @@ class TD3Agent:
             "actor_t": self.actor_t.state_dict(), "critic_t": self.critic_t.state_dict(),
             "actor_opt": self.actor_opt.state_dict(), "critic_opt": self.critic_opt.state_dict(),
             "cfg": self.cfg, "obs_dim": self.obs_dim, "act_dim": self.act_dim, "updates": self.updates,
-            "step": step,
+            "step": step, "actor_bc": self.actor_bc.state_dict() if self.actor_bc is not None else None,
         }
         atomic_write(str(path), lambda tmp: torch.save(ck, tmp))
 
@@ -168,4 +189,7 @@ class TD3Agent:
         for k in ("actor", "critic", "actor_t", "critic_t", "actor_opt", "critic_opt"):
             getattr(agent, k).load_state_dict(ck[k])
         agent.updates = ck["updates"]
+        if ck.get("actor_bc") is not None:
+            agent.set_bc_reference()
+            agent.actor_bc.load_state_dict(ck["actor_bc"])
         return agent

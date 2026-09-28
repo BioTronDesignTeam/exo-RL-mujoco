@@ -28,6 +28,16 @@ def pick_device(name: str = "auto") -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def configure_torch_threads(requested: int, num_envs: int) -> int:
+    """Leave cores for env worker processes. 0 = auto; with one env torch's default is kept."""
+    import torch
+    if requested <= 0 and num_envs > 1:
+        requested = max(1, min(torch.get_num_threads(), (os.cpu_count() or 2) - num_envs))
+    if requested > 0:
+        torch.set_num_threads(requested)
+    return torch.get_num_threads()
+
+
 def deepcopy_cfg(cfg: dict) -> dict:
     return copy.deepcopy(cfg)
 

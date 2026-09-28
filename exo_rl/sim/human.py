@@ -80,6 +80,7 @@ class HumanController:
         tau_ff = m_qdd[hm.human_dof] + bias
         tau_needed = tau_ff + self.kp * e + self.kd * ed + self.ki * self.integral
         tau_h = np.clip(tau_needed - self.beta * tau_exo_human_order, -self.tau_max, self.tau_max)
+        self.tau_needed = tau_needed        # read-only export (before exo offloading); not used here
 
         # Root residuals (x: velocity helper; pitch: trunk helper; z: none).
         r = self.residual
