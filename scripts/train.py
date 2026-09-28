@@ -247,6 +247,8 @@ def main():
 
             # One env stops at an episode boundary (as before); with several, mid-episode is fine.
             if args.max_minutes and (time.time() - t0) > 60 * args.max_minutes and (runner.overlap or any_done):
+                print(f"[train] {step - start + 1} steps in {(time.time() - t0) / 60:.1f} min "
+                      f"({(step - start + 1) / (time.time() - t0):.0f} steps/s incl. evaluation)")
                 snapshot(step)
                 return
     except KeyboardInterrupt:
@@ -259,7 +261,8 @@ def main():
             runner.close()
 
     agent.save(os.path.join(run_dir, "checkpoints", "latest.pt"), step)
-    print(f"[train] done in {(time.time() - t0) / 60:.1f} min")
+    print(f"[train] done in {(time.time() - t0) / 60:.1f} min "
+          f"({(step - start + 1) / (time.time() - t0):.0f} steps/s incl. evaluation)")
 
 
 def crossed(prev: int, cur: int, every: int) -> bool:

@@ -13,7 +13,7 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 30 tests, ~30 s — confirms everything works
+python -m pytest                # 40 tests, ~1 min — confirms everything works
 ```
 
 - **Video recording** needs `imageio[ffmpeg]` (`pip install "imageio[ffmpeg]"`).
@@ -177,6 +177,47 @@ python -m pytest tests/test_exo.py    # one file
 
 ## Training faster
 
+**Recommended fast run** (warm start + 4 parallel envs; ~3 min pretraining, then RL):
+
+```bash
+python scripts/pretrain_bc.py --name bc --steps 80000 && python scripts/train.py --name ws --config runs/bc/config.yaml --init-from runs/bc/checkpoints/bc.pt --set train.num_envs=4 --set train.updates_per_step=0.25 --set train.eval_every=50000
+```
+
+From scratch, the one-line speed-up is `--set train.num_envs=4 --set train.updates_per_step=0.25`.
+
+### Benchmark (8-thread consumer CPU, no GPU; 4 ACE tasks, otherwise default settings)
+
+Throughput in the learning phase (2 min each, evaluation off):
+
+| `num_envs` | `updates_per_step=1.0` | `updates_per_step=0.25` |
+|---|---|---|
+| 1 (default) | 70 steps/s | 200 steps/s |
+| 4 | 93 steps/s | **294 steps/s** |
+| 8 | 60 steps/s | 226 steps/s (260 with `train.torch_threads=2`) |
+
+Here a gradient update costs ~15 ms and an env step ~1.2 ms, so fewer updates per sample matter
+most. More envs than physical cores stop paying off.
+
+Equal 30-min budget, then `evaluate.py` (best.pt, 3 episodes/task). "Net vs no exo" is effort
+compared with the pilot not wearing the exo; positive = the exo helps:
+
+| Run | Steps | squat | high_knees | quick_steps | backward_walk |
+|---|---|---|---|---|---|
+| A. scratch, `num_envs=1` (default) | 128k | −16.9% | −10.2% | −10.6% | −14.7% |
+| B. scratch, 4 envs, 0.25 upd/step | 320k | +2.3% | −6.3% | −22.5% | −10.1% |
+| C. BC warm start (3 min) + RL as B (27 min) | 239k | **+13.3%** | **−1.9%** | −21.1% | **−4.6%** |
+| (C's BC policy alone, before RL) | — | +7.3% | −1.9% | −20.4% | −3.6% |
+
+Takeaways (single seed, so treat small differences as noise):
+- Parallel envs with fewer updates collect 2.5× more experience in the same time, and B beats A
+  on three of four tasks. quick_steps got worse in both B and C, so check per-task results.
+- The BC warm start gives most of the gain in 3 minutes. Within 27 min, RL fine-tuning improved
+  squat but barely moved the others; longer fine-tuning is where RL has to earn its keep.
+- With default evaluation settings, the parallel run spent ~40% of its wall time evaluating (177
+  vs 294 steps/s); with 1 env it is negligible. Hence `train.eval_every=50000` above.
+
+### Options
+
 **Parallel simulation.** `train.num_envs=N` runs N envs in worker processes and overlaps
 their simulation with the gradient updates. On CPU the updates dominate the cost, so pair
 it with `train.updates_per_step` < 1. The default (`num_envs=1`, `updates_per_step=1.0`)
@@ -204,7 +245,7 @@ are off unless `--init-from` is used.
 
 | Override | Effect |
 |---|---|
-| `train.eval_every=50000` / `train.eval_episodes=2` | Evaluation takes about 10–15% of training time, more as training gets faster |
+| `train.eval_every=50000` / `train.eval_episodes=2` | Evaluation is cheap with 1 env but took ~40% of wall time with 4 envs (see above) |
 | `agent.hidden=[128,128]` | Roughly 3× cheaper updates; check that final effort holds up |
 | `agent.batch_size=512` | Nearly free on a GPU; on CPU cost grows with batch size |
 | `"tasks.names=[squat]"` | Train on fewer tasks while tuning, then fine-tune on all with `--init-from` |
@@ -268,7 +309,7 @@ exo_rl/*.py       evaluation, warm start (teacher + behavior cloning), viewing h
 scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            30 tests
+tests/            40 tests
 runs/demo/        example trained run
 ```
 
@@ -289,4 +330,4 @@ runs/demo/        example trained run
 - **Read effort as relative.** The simulated human's absolute effort runs high. Compare exo on vs. off, or vs. no exo.
 - **The exo has a cost.** Wearing it unpowered raises effort by 15–38%. The policy must repay that before the pilot comes out ahead.
 - **Placeholders to replace:** the motions are synthetic until you record real ones, and the URDF torque limit of 10 Nm looks like an exporter default.
-- **Speed.** Training runs ~115 steps/s on one CPU core, so 1M steps take ~2.5 h. Use `--max-minutes` / `--resume` to split it up.
+- **Speed.** With default settings training runs ~70–115 steps/s depending on the CPU (1M steps take 2.5–4 h); gradient updates, not the simulation, dominate. See [Training faster](#training-faster), and use `--max-minutes` / `--resume` to split long runs.

@@ -32,7 +32,8 @@ def configure_torch_threads(requested: int, num_envs: int) -> int:
     """Leave cores for env worker processes. 0 = auto; with one env torch's default is kept."""
     import torch
     if requested <= 0 and num_envs > 1:
-        requested = max(1, min(torch.get_num_threads(), (os.cpu_count() or 2) - num_envs))
+        # >= 2: the learner is the bottleneck; 1 thread was slower even with 8 busy workers
+        requested = max(2, min(torch.get_num_threads(), (os.cpu_count() or 2) - num_envs))
     if requested > 0:
         torch.set_num_threads(requested)
     return torch.get_num_threads()
