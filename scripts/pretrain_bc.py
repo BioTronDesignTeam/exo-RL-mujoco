@@ -3,7 +3,7 @@
     python scripts/pretrain_bc.py --name bc                      # ~200k samples, parallel envs
     python scripts/train.py --name ws --init-from runs/bc/checkpoints/bc.pt   # RL fine-tuning
 
-The teacher supplies a fraction of the torque the simulated human needs (exo_rl/warmstart.py).
+The teacher and the data collector live in exo_rl/warmstart.py; this file is the command line.
 Data is collected in rounds with parallel envs (randomization on): the exo executes the
 teacher's action plus small noise, mixed with the current BC policy in later rounds
 (DAgger-style), so the dataset covers states the learned policy visits. After each round the
@@ -28,58 +28,12 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exo_rl.agents.td3 import TD3Agent  # noqa: E402
+from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
 from exo_rl.evaluation import evaluate, no_exo_effort  # noqa: E402
-from exo_rl.utils import atomic_write, configure_torch_threads, load_config, pick_device  # noqa: E402
-from exo_rl.warmstart import causal_teacher, label_episode, mse, teacher_action, train_bc  # noqa: E402
-
-
-class Collector:
-    """Steps the envs, executing a teacher/BC mix, and turns finished trajectories into labels."""
-
-    def __init__(self, runner, ws: dict, action_scale):
-        self.runner, self.scale = runner, action_scale
-        self.fraction, self.offset = float(ws["teacher_fraction"]), int(ws["label_offset_steps"])
-        self.noise = float(ws["collect_noise"])
-        n = runner.num_envs
-        self.obs, _ = runner.reset()
-        self.last_tau = np.zeros((n, 4))                  # the teacher can only use the past
-        self.hist = [([], []) for _ in range(n)]           # per env: observations, tau_needed
-        self.transitions = []                              # (obs, action, reward, next_obs, terminated)
-
-    def _flush(self, i, xs, ys):
-        o, tau = self.hist[i]
-        x, y = label_episode(o, tau, self.fraction, self.scale, self.offset)
-        xs.append(x)
-        ys.append(y)
-        self.hist[i] = ([], [])
-
-    def collect(self, n_steps: int, actor=None, mix: float = 0.0, device="cpu"):
-        xs, ys = [], []
-        n = self.runner.num_envs
-        for _ in range(int(np.ceil(n_steps / n))):
-            a = teacher_action(self.last_tau, self.fraction, self.scale)
-            if actor is not None and mix > 0:
-                with torch.no_grad():
-                    a_bc = actor(torch.as_tensor(self.obs, dtype=torch.float32, device=device)).cpu().numpy()
-                a = (1 - mix) * a + mix * a_bc
-            a = np.clip(a + np.random.normal(0, self.noise, a.shape), -1.0, 1.0)
-            self.runner.step_async(a)
-            obs2, trans = self.runner.step_wait()
-            for i, t in enumerate(trans):
-                self.transitions.append((self.obs[i], a[i], t.reward, t.next_obs, t.terminated))
-                self.hist[i][0].append(self.obs[i])
-                self.hist[i][1].append(t.info["tau_needed"])
-                self.last_tau[i] = t.info["tau_needed"]
-                if t.terminated or t.truncated:
-                    self._flush(i, xs, ys)
-                    self.last_tau[i] = 0.0
-            self.obs = obs2
-        for i in range(n):                       # episodes continue next round; label what we have
-            self._flush(i, xs, ys)
-        return np.concatenate(xs), np.concatenate(ys)
+from exo_rl.utils import configure_torch_threads, load_config, pick_device  # noqa: E402
+from exo_rl.warmstart import Collector, causal_teacher, mse, train_bc  # noqa: E402
 
 
 def report(cfg, agent, fraction, episodes):
@@ -138,7 +92,8 @@ def main():
     t0 = time.time()
     xs, ys = [], []
     try:
-        col = Collector(runner, ws, cfg["exo"]["action_scale"])
+        buf = ReplayBuffer(obs_dim, act_dim, args.steps + rounds * num_envs) if ws.get("save_buffer", True) else None
+        col = Collector(runner, ws, cfg["exo"]["action_scale"], buf)
         for r in range(rounds):
             mix = r / rounds
             tc = time.time()
@@ -159,21 +114,13 @@ def main():
     path = os.path.join(run_dir, "checkpoints", "bc.pt")
     agent.save(path, step=0)
     buf_path = os.path.join(run_dir, "checkpoints", "bc_buffer.npz")
-    if ws.get("save_buffer", True):
-        tr = col.transitions
-
-        def write(tmp):
-            with open(tmp, "wb") as f:
-                np.savez(f, obs=np.array([x[0] for x in tr], np.float32), act=np.array([x[1] for x in tr], np.float32),
-                         rew=np.array([x[2] for x in tr], np.float32)[:, None],
-                         next_obs=np.array([x[3] for x in tr], np.float32),
-                         not_done=1.0 - np.array([x[4] for x in tr], np.float32)[:, None])
-        atomic_write(buf_path, write)
-        print(f"[bc] saved {len(tr)} transitions to {buf_path}")
+    if buf is not None:
+        buf.save(buf_path)
+        print(f"[bc] saved {len(buf)} transitions to {buf_path}")
     print(f"[bc] saved {path} after {(time.time() - t0) / 60:.1f} min")
     report(cfg, agent, float(ws["teacher_fraction"]), int(ws.get("eval_episodes", 2)))
     print(f"\nFine-tune with: python scripts/train.py --name {name}_rl --config {run_dir}/config.yaml "
-          f"--init-from {path}" + (f" --init-buffer {buf_path}" if ws.get("save_buffer", True) else ""))
+          f"--init-from {path}" + (f" --init-buffer {buf_path}" if buf is not None else ""))
 
 
 if __name__ == "__main__":

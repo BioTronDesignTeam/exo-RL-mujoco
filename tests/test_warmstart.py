@@ -81,3 +81,24 @@ def test_actor_freeze_and_bc_reference(tmp_path, cfg):
     agent.save(tmp_path / "a.pt")
     loaded = TD3Agent.load(tmp_path / "a.pt")
     assert all(torch.equal(a, b) for a, b in zip(w0, loaded.actor_bc.parameters()))
+
+
+def test_warm_start_schedule():
+    from exo_rl.training import WarmStartSchedule
+    off = WarmStartSchedule.from_config({"actor_freeze_steps": 100, "bc_weight": 2.0}, active=False)
+    assert off.at(1) == (False, 0.0)        # inactive: no freeze, no BC term
+    s = WarmStartSchedule(freeze_steps=100, bc_weight=2.0, bc_decay_steps=200)
+    assert s.at(50) == (True, 2.0)          # frozen
+    assert s.at(200) == (False, 1.0)        # halfway through the decay
+    assert s.at(1000) == (False, 0.0)
+
+
+def test_collector_handles_episode_ending_at_round_end(cfg):
+    from exo_rl.envs.vector import SingleRunner
+    from exo_rl.warmstart import Collector
+    cfg["sim"]["episode_seconds"] = 0.1                 # 10-step episodes
+    buf = ReplayBuffer(ExoAssistEnv(cfg).observation_space.shape[0], 4, 100)
+    col = Collector(SingleRunner(cfg, seed=0), cfg["warmstart"], cfg["exo"]["action_scale"], buf)
+    x, y = col.collect(20)                              # ends exactly on an episode boundary
+    x2, _ = col.collect(10)
+    assert len(x) == 2 * 9 and len(x2) == 9 and len(buf) == 30 and y.shape[1] == 4

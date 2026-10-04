@@ -13,7 +13,7 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 44 tests, ~1.5 min — confirms everything works
+python -m pytest                # 47 tests, ~1.5 min — confirms everything works
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
@@ -302,6 +302,9 @@ All settings are commented in `configs/default.yaml`. The exo itself is defined 
 
 ## Project layout
 
+Working on the code? Read [CONTRIBUTING.md](CONTRIBUTING.md) first: how a control step flows,
+where to change what, conventions, and how to keep default training bit-identical.
+
 ```
 configs/          default.yaml (all settings), exo_mk1.yaml (your exo)
 assets/exo_mk1/   MuJoCo-ready URDF + meshes (hi = viewing, lo = training)
@@ -309,11 +312,11 @@ exo_rl/sim/       human + exo model, reference motions, human controller
 exo_rl/control/   observation + torque pipeline — shared with hardware, keep identical
 exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
 exo_rl/agents/    TD3 / DDPG learning algorithm
-exo_rl/*.py       evaluation, warm start (teacher + behavior cloning), viewing helpers
+exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing helpers
 scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            44 tests
+tests/            47 tests
 runs/demo/        example trained run
 ```
 

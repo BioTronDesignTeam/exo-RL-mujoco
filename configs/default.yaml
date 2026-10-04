@@ -128,3 +128,4 @@ warmstart:                   # teacher -> behavior cloning (scripts/pretrain_bc.
   lr: 0.001
   num_envs: 0                # collection processes; 0 = one per CPU core (max 8)
   eval_episodes: 2           # per task, for the teacher / BC report
+  save_buffer: true          # also save the collected transitions (bc_buffer.npz) for train.py --init-buffer

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import os
+from typing import Callable, NamedTuple
 
 import numpy as np
 
@@ -92,8 +93,15 @@ def evaluate_checkpoint(cfg: dict, path: str, tasks, episodes: int, baseline=Non
     return evaluate(ExoAssistEnv(cfg, seed=0), lambda o: agent.act(o, 0.0), tasks, episodes, baseline=baseline)
 
 
+class FinishedEval(NamedTuple):
+    step: int                          # env step whose weights were evaluated
+    results: dict                      # evaluate() output, per task
+    save_best: Callable[[str], None]   # save_best(path): write exactly those weights to path
+
+
 class PeriodicEval:
     """Training-time evaluation, inline (default) or in one background process (async_=True).
+    The exo-off baseline is measured once and reused (self.baseline).
     Async: the evaluated weights are saved to a pending file that becomes best.pt if they win.
     If an evaluation is still running when the next is due, the newest one waits in a queue of
     one (an older queued one is dropped)."""
@@ -106,12 +114,13 @@ class PeriodicEval:
             from concurrent.futures import ProcessPoolExecutor
             self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
 
-    def run(self, agent, step):
-        """Returns [(step, results, save_best)] finished now; save_best(path) writes best.pt."""
+    def run(self, agent, step) -> list[FinishedEval]:
+        """Evaluate the agent's current weights. Inline: returns the result now. Async: starts
+        (or queues) the evaluation and returns []; collect results with poll()."""
         if self.pool is None:
             res, self.baseline = evaluate(self.env, lambda o: agent.act(o, noise=0.0), self.tasks,
                                           self.episodes, baseline=self.baseline)
-            return [(step, res, lambda path: agent.save(path, step))]
+            return [FinishedEval(step, res, lambda path: agent.save(path, step))]
         path = os.path.join(self.dir, f"eval_pending_{step}.pt")
         agent.save(path, step)
         if self.pending is None:
@@ -127,23 +136,23 @@ class PeriodicEval:
         fut = self.pool.submit(evaluate_checkpoint, self.cfg, path, self.tasks, self.episodes, self.baseline)
         self.pending = (step, path, fut)
 
-    def poll(self, wait=False):
-        """Finished async evaluations (none in inline mode)."""
+    def poll(self, wait=False) -> list[FinishedEval]:
+        """Finished async evaluations (none in inline mode); wait=True blocks until all are done."""
         out = []
         while self.pending is not None and (wait or self.pending[2].done()):
             step, path, fut = self.pending
             self.pending = None
             res, self.baseline = fut.result()
-            out.append((step, res, lambda best_path, src=path: os.replace(src, best_path)))
+            out.append(FinishedEval(step, res, lambda best_path, src=path: os.replace(src, best_path)))
             if self.queued is not None:
                 self._submit(*self.queued)
                 self.queued = None
         return out
 
-    def discard(self, results):
+    def discard(self, finished: list[FinishedEval]):
         """Delete pending files of async results that did not become best.pt."""
-        for step, _, _ in results:
-            p = os.path.join(self.dir, f"eval_pending_{step}.pt")
+        for ev in finished:
+            p = os.path.join(self.dir, f"eval_pending_{ev.step}.pt")
             if os.path.exists(p):
                 os.remove(p)
 

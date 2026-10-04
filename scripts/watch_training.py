@@ -14,6 +14,7 @@ macOS: the live viewer needs `mjpython scripts/watch_training.py ...`.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import itertools
 import os
 import sys
@@ -64,9 +65,7 @@ def run_live(env, watcher, args):
 
 
 def run_record(env, watcher, args):
-    try:
-        import imageio  # noqa: F401
-    except ImportError:
+    if importlib.util.find_spec("imageio") is None:
         sys.exit('[watch] --record-dir needs imageio: pip install "imageio[ffmpeg]"')
     os.makedirs(args.record_dir, exist_ok=True)
     env.max_steps = 10 ** 9                      # videos run for --seconds, not the episode length

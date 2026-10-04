@@ -41,3 +41,19 @@ def test_atomic_write_replaces_whole_file(tmp_path):
     p.write_text("old")
     atomic_write(str(p), lambda tmp: open(tmp, "w").write("new"))
     assert p.read_text() == "new" and not (tmp_path / "f.txt.tmp").exists()
+
+
+def test_replay_buffer_save_load_and_prefill(tmp_path):
+    buf = ReplayBuffer(6, 4, 50)
+    for i in range(30):
+        buf.add(np.full(6, i), np.zeros(4), float(i), np.full(6, i + 1), terminated=(i == 29))
+    buf.save(tmp_path / "b.npz")
+    same = ReplayBuffer(6, 4, 50)
+    same.load(tmp_path / "b.npz")
+    assert len(same) == 30 and np.array_equal(same.obs, buf.obs) and same.not_done[29] == 0.0
+    other = ReplayBuffer(6, 4, 100)
+    other.add(np.zeros(6), np.zeros(4), 0.0, np.zeros(6), False)
+    assert other.add_from_file(tmp_path / "b.npz") == 30 and len(other) == 31
+    assert other.rew[30] == 29.0 and other.not_done[30] == 0.0
+    with pytest.raises(ValueError, match="obs size"):
+        ReplayBuffer(8, 4, 10).add_from_file(tmp_path / "b.npz")

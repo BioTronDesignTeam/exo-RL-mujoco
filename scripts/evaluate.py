@@ -62,10 +62,7 @@ def randomized_table(env, cfg, policy, tasks, n, out_dir):
             if no_exo:
                 row["net_vs_no_exo_pct"] = round(float(100 * (1 - e.mean() / no_exo[task])), 2)
             rows.append(row)
-    with open(os.path.join(out_dir, "summary_randomized.csv"), "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
+    write_csv(rows, os.path.join(out_dir, "summary_randomized.csv"))
     net_hdr = f"{'net vs no exo':>15s}" if no_exo else ""
     print(f"\nRandomized pilots ({n} per task, each compared with itself):")
     print(f"{'task':15s}{'mode':9s}{'vs exo off':>12s}{'worst pilot':>13s}{net_hdr}{'fail':>6s}")
@@ -77,8 +74,92 @@ def randomized_table(env, cfg, policy, tasks, n, out_dir):
               f"{net}{r['failed']:6.2f}")
 
 
+def nominal_table(env, policy, tasks, episodes, no_exo):
+    """Nominal pilot: mean over `episodes` per task and mode. Returns (rows, first-episode traces)."""
+    rows, traces = [], {}
+    for task in tasks:
+        base = None
+        for mode in MODES:                      # "off" first: it is the baseline for "policy"
+            eps = []
+            for i in range(episodes):
+                res, tr = run_episode(env, policy, task, mode, seed=2000 + i, record=True)
+                eps.append(res)
+                if i == 0:
+                    traces[(task, mode)] = tr
+            agg = {k: float(np.mean([e[k] for e in eps])) for k in eps[0]}
+            if mode == "off":
+                base = agg["effort"]
+            agg["effort_reduction_pct"] = 100.0 * (1 - agg["effort"] / max(base, 1e-9))
+            if no_exo:
+                agg["net_vs_no_exo_pct"] = 100.0 * (1 - agg["effort"] / max(no_exo[task], 1e-9))
+            rows.append({"task": task, "mode": mode, **{k: round(v, 4) for k, v in agg.items()}})
+    return rows, traces
+
+
+def write_csv(rows, path):
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+
+
+def print_nominal(rows, no_exo):
+    net_hdr = f"{'net vs no exo':>15s}" if no_exo else ""
+    print(f"\n{'task':15s}{'mode':13s}{'effort':>8s}{'vs exo off':>12s}{net_hdr}{'track_rms':>11s}{'peak_tau':>10s}{'fail':>6s}")
+    for r in rows:
+        net = f"{r['net_vs_no_exo_pct']:+14.1f}%" if no_exo else ""
+        print(f"{r['task']:15s}{r['mode']:13s}{r['effort']:8.3f}{r['effort_reduction_pct']:+11.1f}%{net}"
+              f"{r['tracking_rms_deg']:10.1f}°{r['peak_exo_torque']:9.1f}{r['failed']:6.2f}")
+    if no_exo:
+        print("\n'vs exo off' = benefit of powering the exo you're wearing; "
+              "'net vs no exo' = compared with the pilot not wearing it (what ACE measures).")
+
+
+def plot_effort(rows, no_exo, tasks, path):
+    """Bar chart: not wearing exo / exo off / exo policy, per task."""
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(tasks))
+    series = ([("not wearing exo", [no_exo[t] for t in tasks])] if no_exo else []) + [
+        (f"exo {mode}", [next(r["effort"] for r in rows if r["task"] == t and r["mode"] == mode) for t in tasks])
+        for mode in MODES]
+    w = 0.8 / len(series)
+    for j, (label, vals) in enumerate(series):
+        ax.bar(x + (j - (len(series) - 1) / 2) * w, vals, w, label=label)
+    ax.set_xticks(x, tasks, rotation=15)
+    ax.set_ylabel("human effort  mean((τ_h/τ_max)²)")
+    ax.set_title("Simulated human effort by task (lower is better)")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
+def plot_gait(traces, task, path):
+    """Left hip/knee over the gait cycle: angle vs reference, human torque exo off vs policy, exo torque."""
+    pct = np.linspace(0, 100, 50)
+    fig, axes = plt.subplots(2, 2, figsize=(10, 6), sharex=True)
+    for c, (j, jname) in enumerate([(0, "hip_l"), (1, "knee_l")]):
+        tr = traces[(task, "policy")]
+        axes[0, c].plot(pct, np.degrees(phase_average(tr, "q_ref", j)), "k-", label="reference")
+        axes[0, c].plot(pct, np.degrees(phase_average(tr, "q", j)), "r-", label="sim (with exo)")
+        axes[0, c].set_title(f"{jname} angle")
+        axes[0, c].set_ylabel("deg")
+        for mode, style in (("off", "k--"), ("policy", "b-")):
+            axes[1, c].plot(pct, phase_average(traces[(task, mode)], "tau_human", j), style,
+                            label=f"human torque, exo {mode}")
+        axes[1, c].plot(pct, phase_average(tr, "tau_exo_cmd", c), "g-", label="exo torque")
+        axes[1, c].set_ylabel("Nm")
+        axes[1, c].set_xlabel("% cycle")
+    axes[0, 0].legend(fontsize=8)
+    axes[1, 0].legend(fontsize=8)
+    fig.suptitle(f"{task}: tracking and torque over the cycle")
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run", required=True)
     ap.add_argument("--ckpt", default="best.pt")
     ap.add_argument("--episodes", type=int, default=3)
@@ -95,83 +176,15 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     no_exo = no_exo_effort(cfg, tasks, args.episodes, seed0=2000)
-
-    rows, traces = [], {}
-    for task in tasks:
-        base = None
-        for mode in MODES:
-            eps = []
-            for i in range(args.episodes):
-                res, tr = run_episode(env, policy, task, mode, seed=2000 + i, record=True)
-                eps.append(res)
-                if i == 0:
-                    traces[(task, mode)] = tr
-            agg = {k: float(np.mean([e[k] for e in eps])) for k in eps[0]}
-            if mode == "off":
-                base = agg["effort"]
-            agg["effort_reduction_pct"] = 100.0 * (1 - agg["effort"] / max(base, 1e-9))
-            if no_exo:
-                agg["net_vs_no_exo_pct"] = 100.0 * (1 - agg["effort"] / max(no_exo[task], 1e-9))
-            rows.append({"task": task, "mode": mode, **{k: round(v, 4) for k, v in agg.items()}})
-
-    with open(os.path.join(out_dir, "summary.csv"), "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
-
-    net_hdr = f"{'net vs no exo':>15s}" if no_exo else ""
-    print(f"\n{'task':15s}{'mode':13s}{'effort':>8s}{'vs exo off':>12s}{net_hdr}{'track_rms':>11s}{'peak_tau':>10s}{'fail':>6s}")
-    for r in rows:
-        net = f"{r['net_vs_no_exo_pct']:+14.1f}%" if no_exo else ""
-        print(f"{r['task']:15s}{r['mode']:13s}{r['effort']:8.3f}{r['effort_reduction_pct']:+11.1f}%{net}"
-              f"{r['tracking_rms_deg']:10.1f}°{r['peak_exo_torque']:9.1f}{r['failed']:6.2f}")
-    if no_exo:
-        print("\n'vs exo off' = benefit of powering the exo you're wearing; "
-              "'net vs no exo' = compared with the pilot not wearing it (what ACE measures).")
-
+    rows, traces = nominal_table(env, policy, tasks, args.episodes, no_exo)
+    write_csv(rows, os.path.join(out_dir, "summary.csv"))
+    print_nominal(rows, no_exo)
     if args.randomized:
         randomized_table(env, cfg, policy, tasks, args.randomized, out_dir)
 
-    # Effort bar chart
-    fig, ax = plt.subplots(figsize=(8, 4))
-    x = np.arange(len(tasks))
-    series = ([("not wearing exo", [no_exo[t] for t in tasks])] if no_exo else []) + [
-        (f"exo {mode}", [next(r["effort"] for r in rows if r["task"] == t and r["mode"] == mode) for t in tasks])
-        for mode in MODES]
-    w = 0.8 / len(series)
-    for j, (label, vals) in enumerate(series):
-        ax.bar(x + (j - (len(series) - 1) / 2) * w, vals, w, label=label)
-    ax.set_xticks(x, tasks, rotation=15)
-    ax.set_ylabel("human effort  mean((τ_h/τ_max)²)")
-    ax.set_title("Simulated human effort by task (lower is better)")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, "effort_by_task.png"), dpi=130)
-    plt.close(fig)
-
-    # Gait-cycle plots
-    pct = np.linspace(0, 100, 50)
+    plot_effort(rows, no_exo, tasks, os.path.join(out_dir, "effort_by_task.png"))
     for task in tasks:
-        fig, axes = plt.subplots(2, 2, figsize=(10, 6), sharex=True)
-        for c, (j, jname) in enumerate([(0, "hip_l"), (1, "knee_l")]):
-            tr = traces[(task, "policy")]
-            axes[0, c].plot(pct, np.degrees(phase_average(tr, "q_ref", j)), "k-", label="reference")
-            axes[0, c].plot(pct, np.degrees(phase_average(tr, "q", j)), "r-", label="sim (with exo)")
-            axes[0, c].set_title(f"{jname} angle")
-            axes[0, c].set_ylabel("deg")
-            for mode, style in (("off", "k--"), ("policy", "b-")):
-                axes[1, c].plot(pct, phase_average(traces[(task, mode)], "tau_human", j), style,
-                                label=f"human torque, exo {mode}")
-            axes[1, c].plot(pct, phase_average(traces[(task, "policy")], "tau_exo_cmd", [0, 1][c]), "g-",
-                            label="exo torque")
-            axes[1, c].set_ylabel("Nm")
-            axes[1, c].set_xlabel("% cycle")
-        axes[0, 0].legend(fontsize=8)
-        axes[1, 0].legend(fontsize=8)
-        fig.suptitle(f"{task}: tracking and torque over the cycle")
-        fig.tight_layout()
-        fig.savefig(os.path.join(out_dir, f"gait_{task}.png"), dpi=120)
-        plt.close(fig)
+        plot_gait(traces, task, os.path.join(out_dir, f"gait_{task}.png"))
     print(f"\nSaved results to {out_dir}")
 
 

@@ -53,6 +53,8 @@ class Critic(nn.Module):
 
 
 class ReplayBuffer:
+    FIELDS = ("obs", "act", "rew", "next_obs", "not_done")
+
     def __init__(self, obs_dim, act_dim, size):
         self.obs = np.zeros((size, obs_dim), np.float32)
         self.act = np.zeros((size, act_dim), np.float32)
@@ -70,6 +72,33 @@ class ReplayBuffer:
         self.not_done[i] = 0.0 if terminated else 1.0   # truncation still bootstraps
         self.ptr = (self.ptr + 1) % self.size
         self.full = self.full or self.ptr == 0
+
+    def save(self, path):
+        """Write the filled part to an .npz (atomically)."""
+        n = len(self)
+
+        def write(tmp):
+            with open(tmp, "wb") as f:
+                np.savez(f, n=n, ptr=self.ptr, full=self.full, **{k: getattr(self, k)[:n] for k in self.FIELDS})
+        atomic_write(str(path), write)
+
+    def load(self, path):
+        """Restore exactly what save() wrote (used by train.py --resume)."""
+        data = np.load(path)
+        n = int(data["n"])
+        for k in self.FIELDS:
+            getattr(self, k)[:n] = data[k]
+        self.ptr, self.full = int(data["ptr"]), bool(data["full"])
+
+    def add_from_file(self, path) -> int:
+        """Append the transitions of a saved buffer (e.g. bc_buffer.npz). Returns how many."""
+        data = np.load(path)
+        if data["obs"].shape[1] != self.obs.shape[1]:
+            raise ValueError(f"{path} has obs size {data['obs'].shape[1]}, this buffer {self.obs.shape[1]}")
+        n = int(data["n"])
+        for o, a, r, o2, nd in zip(*(data[k][:n] for k in self.FIELDS)):
+            self.add(o, a, float(r[0]), o2, nd[0] == 0.0)
+        return n
 
     def sample(self, n, device):
         idx = np.random.randint(0, len(self), n)

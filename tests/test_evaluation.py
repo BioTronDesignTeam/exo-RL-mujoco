@@ -20,7 +20,7 @@ def test_async_eval_matches_inline_and_queues_newest(tmp_path, cfg):
     env = ExoAssistEnv(cfg, seed=0)
     agents = [TD3Agent(env.observation_space.shape[0], 4, cfg["agent"]) for _ in range(3)]
     inline = PeriodicEval(cfg, env, ["squat"], 1, str(tmp_path))
-    ref = [inline.run(a, s)[0][1] for a, s in zip(agents, (100, 200, 300))]
+    ref = [inline.run(a, s)[0].results for a, s in zip(agents, (100, 200, 300))]
 
     ev = PeriodicEval(cfg, env, ["squat"], 1, str(tmp_path), async_=True)
     try:
@@ -29,10 +29,10 @@ def test_async_eval_matches_inline_and_queues_newest(tmp_path, cfg):
         done = ev.poll(wait=True)
     finally:
         ev.close()
-    assert [d[0] for d in done] == [100, 300]             # 200 was replaced in the queue
-    for (step, res, save_best), r in zip(done, (ref[0], ref[2])):
-        assert np.isclose(res["squat"]["effort"], r["squat"]["effort"])
-    done[1][2](str(tmp_path / "best.pt"))                 # winner's file becomes best.pt
+    assert [d.step for d in done] == [100, 300]           # 200 was replaced in the queue
+    for fin, r in zip(done, (ref[0], ref[2])):
+        assert np.isclose(fin.results["squat"]["effort"], r["squat"]["effort"])
+    done[1].save_best(str(tmp_path / "best.pt"))          # winner's file becomes best.pt
     ev.discard(done)
     assert sorted(os.listdir(tmp_path)) == ["best.pt"]
 
