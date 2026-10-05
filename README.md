@@ -338,3 +338,37 @@ runs/demo/        example trained run
 - **The exo has a cost.** Wearing it unpowered raises effort by 15–38%. The policy must repay that before the pilot comes out ahead.
 - **Placeholders to replace:** the motions are synthetic until you record real ones, and the URDF torque limit of 10 Nm looks like an exporter default.
 - **Speed.** With default settings training runs ~70–115 steps/s depending on the CPU (1M steps take 2.5–4 h); gradient updates, not the simulation, dominate. See [Training faster](#training-faster), and use `--max-minutes` / `--resume` to split long runs.
+
+---
+
+## TODO
+
+Open tasks for contributors. Pick one, put your name next to it, and see
+[CONTRIBUTING.md](CONTRIBUTING.md) for where things live.
+
+### Training
+- [ ] **Multi-seed benchmark.** The results in [Training faster](#training-faster) are one seed each; rerun A/B/C with 3 seeds (plugged in, nothing else running).
+- [ ] **Fix quick_steps.** It is the weakest task. The warm-start teacher only reaches −27% net vs no exo there; try a better teacher (e.g. per-task `teacher_fraction`) or reward shaping.
+- [ ] **Tune warm-start fine-tuning.** In the 30-min run, RL barely improved on the BC policy; sweep `agent.bc_weight`, `bc_decay_steps`, `actor_freeze_steps`.
+- [ ] **Smaller networks.** `agent.hidden=[128,128]` is faster to train; check whether final effort holds up.
+- [ ] **GPU simulation.** Port the env to MuJoCo MJX / Warp (or Isaac Sim) for hundreds of parallel envs; the human controller in `exo_rl/sim/human.py` must be rewritten as batched tensor code.
+
+### Simulation
+- [ ] **Randomization ranges.** Check `randomization:` against real measurements (pilot sizes, actuator latency, torque noise) once hardware data exists.
+- [ ] **Real motions.** Replace the synthetic reference motions with recorded CSVs in `data/motions/`.
+- [ ] **Exo model.** The URDF torque limit of 10 Nm looks like an exporter default; set the real actuator limits.
+- [ ] **Human model.** Upgrade to a musculoskeletal model (e.g. MyoSuite) and use muscle activation as the effort signal.
+
+### Evaluation
+- [ ] **Randomized pilots during training.** `evaluate.py --randomized N` exists; add the same check to training-time evaluation.
+- [ ] **CI.** Run `python -m pytest` on every push (GitHub Actions).
+
+### Hardware
+- [ ] **Hardware interface.** Implement `HardwareInterface` in `deploy/run_hardware.py` (connect, read sensors, send torque, disable).
+- [ ] **Calibration.** Set encoder zero offsets in `configs/exo_mk1.yaml` and verify motor signs on the real exo.
+- [ ] **First tests.** Run the exported policy at reduced torque with firmware limits and an e-stop.
+- [ ] **Docs.** `exo_rl/control/observation.py` refers to `deploy/hardware_interface.py`, which doesn't exist (the interface is in `deploy/run_hardware.py`).
+
+### Tooling
+- [ ] **macOS.** Test the live viewer with `mjpython` (`view.py`, `watch_training.py`).
+- [ ] **Headless Linux.** Test video recording with `MUJOCO_GL=egl` / `osmesa`.
