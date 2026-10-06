@@ -114,6 +114,12 @@ class VectorRunner:
 
 
 def make_runner(cfg: dict, num_envs: int, seed: int, lean_info: bool = True):
+    backend = cfg.get("train", {}).get("sim_backend", "cpu")
+    if backend == "warp":
+        from .warp_runner import WarpRunner
+        return WarpRunner(cfg, num_envs, seed, lean_info)
+    if backend != "cpu":
+        raise ValueError(f"unknown train.sim_backend: {backend!r}; choose cpu or warp")
     if num_envs <= 1:
         return SingleRunner(cfg, seed, lean_info)
     return VectorRunner(cfg, num_envs, seed, lean_info)

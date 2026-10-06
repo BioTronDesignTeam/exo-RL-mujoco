@@ -58,7 +58,7 @@ class CsvLog:
 
 def crossed(prev: int, cur: int, every: int) -> bool:
     """True if a multiple of `every` lies in (prev, cur]; step counts advance by num_envs."""
-    return cur // every > prev // every
+    return every > 0 and cur // every > prev // every
 
 
 @dataclass
@@ -154,7 +154,7 @@ class Trainer:
         self.ev_log = CsvLog(os.path.join(run_dir, "eval.csv"), append=resume)
         ep_csv = CsvLog(os.path.join(run_dir, "episodes.csv"), append=resume)
         print(f"[train] {self.agent.algo.upper()} on {device} | obs {obs_dim} act {act_dim} | "
-              f"{self.num_envs} env(s), {self.updates_per_step:g} updates/step, {threads} torch threads | "
+              f"physics={tr.get('sim_backend', 'cpu')} | {self.num_envs} env(s), {self.updates_per_step:g} updates/step, {threads} torch threads | "
               f"run dir {run_dir}")
 
         # Where training starts from: scratch, a checkpoint (+ prefilled buffer), or a snapshot.

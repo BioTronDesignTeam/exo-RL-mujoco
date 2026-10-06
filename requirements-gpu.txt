@@ -1,0 +1,4 @@
+# Optional NVIDIA physics backend. Install CUDA-enabled PyTorch separately.
+-r requirements.txt
+mujoco-warp
+warp-lang

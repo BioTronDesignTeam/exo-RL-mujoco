@@ -158,6 +158,17 @@ class ExoAssistEnv(gym.Env):
         return obs, {"task": self.ref.name, "params": ep}
 
     def step(self, action):
+        # Drive the same control-step generator with standard CPU physics.
+        step = self.step_substeps(action)
+        try:
+            while True:
+                model, data = next(step)
+                mujoco.mj_step(model, data)
+        except StopIteration as done:
+            return done.value
+
+    def step_substeps(self, action):
+        """Yield before each physics step; the runner supplies CPU or batched GPU physics."""
         action = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
         if self.exo_mode == "off":
             tau_cmd = np.zeros(4)
@@ -190,7 +201,7 @@ class ExoAssistEnv(gym.Env):
             d.qfrc_applied[:] = 0.0
             d.qfrc_applied[hm.human_dof] += tau_h + tau_exo_h
             d.qfrc_applied[hm.root_dof] += tau_res
-            mujoco.mj_step(m, d)
+            yield m, d
             effort_sq += (tau_h / self.human.tau_max) ** 2
             tau_h_sum += tau_h
             tau_needed_sum += self.human.tau_needed

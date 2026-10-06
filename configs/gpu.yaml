@@ -1,0 +1,134 @@
+seed: 0
+
+sim:
+  timestep: 0.002            # physics step (500 Hz)
+  control_dt: 0.01           # policy / pipeline rate (100 Hz); match your hardware loop
+  episode_seconds: 6.0
+  floor_friction: 1.0        # applied to floor AND feet
+  joint_damping: 0.5
+
+subject:                     # nominal pilot (randomized below)
+  height: 1.75
+  mass: 75.0
+
+payload:                     # ACE soft exo: 25 lb dead weight secured to the suit
+  enabled: true
+  mass: 11.34
+  offset: [-0.12, 0.0, 0.20] # m from pelvis origin (lower back). Match your real mount.
+
+exo_hardware:                # CAD exoskeleton mounted on the human (exo_rl/sim/exo_hardware.py)
+  enabled: true
+  spec: configs/exo_mk1.yaml
+  quality: lo                # lo = light meshes for training; view.py switches to hi
+
+tasks:
+  names: [squat, high_knees, quick_steps, backward_walk, walk]
+  data_dir: null             # folder with <task>.csv recordings; synthetic placeholders otherwise
+  # Extra test motions, selectable with --task / reset(options={"task": ...}) but not trained
+  # on unless added to `names`: jog (grounded running), high_knees_travel (moves forward).
+  extra_motions: [jog, high_knees_travel]
+  circuit_prob: 0.3          # fraction of episodes that chain tasks (transitions)
+  circuit_segment_seconds: [2.0, 3.5]
+  circuit_order: random      # random | ace (fixed ACE course order below)
+  ace_order: [squat, high_knees, quick_steps, backward_walk]
+  forbidden_transitions:     # instant direction reversal isn't physically feasible for the model
+    - [backward_walk, walk]
+  blend_seconds: 0.5
+
+human:                       # Level-1 active human model (see exo_rl/sim/human.py)
+  kp: {hip: 800, knee: 800, ankle: 600}
+  kd: {hip: 60, knee: 50, ankle: 30}
+  ki: {hip: 1200, knee: 1200, ankle: 800}
+  integral_limit_frac: 0.5
+  max_torque: {hip: 180, knee: 180, ankle: 150}   # Nm at 75 kg, scaled with mass
+  exo_adaptation: 1.0                             # beta: 1 = human fully offloads exo torque
+  residual: {x_kv: 500, pitch_kp: 2000, pitch_kd: 200}
+
+exo:                         # shared with hardware (exo_rl/control/torque_pipeline.py)
+  joints: [hip_l, knee_l, hip_r, knee_r]
+  max_torque: [40, 40, 40, 40]      # Nm; set to your actuator limits
+  action_scale: [40, 40, 40, 40]
+  rate_limit: 1500                  # Nm/s  (15 Nm per 10 ms step)
+  direction: [both, both, both, both]   # or flexion_only / extension_only for cables
+  feedforward: limb_gravity         # none | limb_gravity
+  alpha: 0.0                        # weight of feedforward; policy learns on top of it
+
+observation:
+  history: 8                 # stacked frames (80 ms at 100 Hz)
+  use_phase: true
+  include_prev_action: true
+
+reward:
+  alive: 2.0                 # keep per-step reward > 0 even with the exo's weight (see rewards.py)
+  w_effort: 2.0
+  w_tracking: 0.3
+  tracking_sigma_deg: 10
+  w_smooth: 0.5
+  w_magnitude: 0.05
+
+termination:
+  max_joint_error_deg: 45
+  min_pelvis_height_frac: 0.5
+
+randomization:
+  enabled: false
+  height: [1.60, 1.90]
+  mass: [55.0, 95.0]
+  payload_mass_scale: [0.95, 1.05]
+  payload_offset_m: 0.03
+  floor_friction: [0.7, 1.2]
+  joint_damping_scale: [0.7, 1.3]
+  human_gain_scale: [0.8, 1.2]
+  exo_adaptation: [0.6, 1.0]
+  latency_steps: [0, 2]            # 0-20 ms at 100 Hz
+  torque_noise_frac: 0.05
+  exo_mass_scale: [0.95, 1.05]     # CAD masses are never exact
+  sensor_noise: {angle: 0.005, velocity: 0.05, gyro: 0.05, accel: 0.2}
+
+agent:
+  algo: td3                  # td3 | ddpg
+  hidden: [256, 256]
+  actor_lr: 0.0003
+  critic_lr: 0.0003
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256
+  buffer_size: 1000000
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_delay: 2
+  expl_noise: 0.1
+  # Warm-start safeguards, used only with train.py --init-from (all off otherwise):
+  actor_freeze_steps: 20000  # only the critic learns for this many steps after start_steps
+  bc_weight: 2.5             # actor loss = -Q/mean|Q| + w*||pi - pi_init||^2 (TD3+BC style) ...
+  bc_decay_steps: 200000     # ... with w decaying linearly to 0 over this many steps after the freeze
+
+train:
+  total_steps: 1000000
+  start_steps: 10000         # random actions before learning starts
+  eval_every: 50000
+  eval_episodes: 3
+  latest_every: 5000         # write checkpoints/latest.pt this often (also after every eval)
+  eval_async: false          # true: evaluate in a background process while training continues
+  best_metric: mean          # best.pt by mean effort reduction over tasks | worst (worst task counts)
+  save_every: 50000
+  device: cuda:0
+  sim_backend: warp          # batched CUDA physics; CPU control bridge
+  warp_device: cuda:0       # CUDA device for physics; align with train.device
+  warp_nconmax: 128         # contact capacity per GPU world; abort on overflow
+  warp_njmax: 512           # constraint capacity per GPU world
+  num_envs: 64               # GPU worlds sharing one nominal model
+  updates_per_step: 0.03125      # gradient updates per collected transition, summed over envs
+  torch_threads: 2           # 0 = auto: torch default for 1 env, leaves cores for workers otherwise
+
+warmstart:                   # teacher -> behavior cloning (scripts/pretrain_bc.py) -> train.py --init-from
+  teacher_fraction: 0.3      # teacher supplies this fraction of the torque the human needs (sim-only info)
+  label_offset_steps: 1      # label obs_t with tau_needed this many steps later (teaches anticipation)
+  rounds: 4                  # collection rounds; round r executes r/rounds BC policy + rest teacher (DAgger)
+  collect_noise: 0.05        # Gaussian noise on executed actions during collection
+  epochs: 10                 # BC epochs over the aggregated dataset after each round
+  batch_size: 256
+  lr: 0.001
+  num_envs: 0                # collection processes; 0 = one per CPU core (max 8)
+  eval_episodes: 2           # per task, for the teacher / BC report
+  save_buffer: true          # also save the collected transitions (bc_buffer.npz) for train.py --init-buffer

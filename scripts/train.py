@@ -43,6 +43,8 @@ def main():
     ap.add_argument("--config", default="configs/default.yaml")
     ap.add_argument("--name", default=None, help="run folder runs/NAME (default: timestamp)")
     ap.add_argument("--set", action="append", default=[], help="override, e.g. agent.algo=ddpg")
+    ap.add_argument("--sim-backend", choices=["cpu", "warp"], help="physics backend (overrides config)")
+    ap.add_argument("--num-envs", type=int, help="number of parallel worlds (overrides config)")
     ap.add_argument("--resume", action="store_true", help="continue runs/<name> from its snapshot")
     ap.add_argument("--max-minutes", type=float, default=None, help="stop and snapshot after this long")
     ap.add_argument("--init-from", default=None,
@@ -52,6 +54,11 @@ def main():
     args = ap.parse_args()
     if hasattr(signal, "SIGBREAK"):          # Windows: Ctrl+Break stops cleanly, like Ctrl+C
         signal.signal(signal.SIGBREAK, signal.default_int_handler)
+
+    if args.sim_backend is not None:
+        args.set.append(f"train.sim_backend={args.sim_backend}")
+    if args.num_envs is not None:
+        args.set.append(f"train.num_envs={args.num_envs}")
 
     name = args.name or time.strftime("run_%Y%m%d_%H%M%S")
     run_dir = os.path.join("runs", name)
