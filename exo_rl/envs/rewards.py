@@ -13,7 +13,7 @@ Notes
     penalises exo torque that knocks the human off their motion (matters when the
     randomized human adaptation beta < 1).
   * `alive` keeps per-step reward positive so early termination is never attractive.
-  * Every term is returned separately so it can be logged (see scripts/train.py).
+  * Every term is returned separately so it can be logged (see exo_rl/training.py, episodes.csv).
 """
 from __future__ import annotations
 

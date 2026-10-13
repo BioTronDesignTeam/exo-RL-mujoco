@@ -13,7 +13,7 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 47 tests, ~1.5 min — confirms everything works
+python -m pytest                # 52 tests, ~1.5 min — confirms everything works
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
@@ -316,7 +316,7 @@ exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing 
 scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            47 tests
+tests/            52 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```
 
@@ -361,7 +361,7 @@ Open tasks for contributors. Pick one, put your name next to it, and see
 
 ### Evaluation
 - [ ] **Randomized pilots during training.** `evaluate.py --randomized N` exists; add the same check to training-time evaluation.
-- [ ] **CI.** Run `python -m pytest` on every push (GitHub Actions).
+- [x] **CI.** `.github/workflows/ci.yml` runs lint + tests on every PR and push to main.
 
 ### Hardware
 - [ ] **Hardware interface.** Implement `HardwareInterface` in `deploy/run_hardware.py` (connect, read sensors, send torque, disable).

@@ -94,5 +94,8 @@ between any two runs.
 ## Before you commit
 
 - `python -m pytest` passes; add a test for new behavior (tests are fast, small configs).
+- CI (`.github/workflows/ci.yml`) runs `pyflakes` and the full test suite on every pull request;
+  a PR is merged only when the `tests` check is green.
+- Changing the reward? `tests/test_reward.py` pins down the formula; update those tests on purpose.
 - New option: config key with a comment and/or a CLI flag, plus a README line.
 - Don't commit `runs/` (except `runs/demo/`); training output is large.
