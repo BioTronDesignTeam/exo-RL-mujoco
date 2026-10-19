@@ -20,6 +20,14 @@ python -m pytest                # 52 tests, ~1.5 min — confirms everything wor
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 
+**Docker** (same environment for everyone; headless, CPU):
+
+```bash
+docker build -t exo-rl .
+docker run --rm exo-rl                                         # run the tests
+docker run --rm -v "$PWD/runs:/app/runs" exo-rl python scripts/train.py --name mk1 --max-minutes 60
+```
+
 ---
 
 ## Quick start

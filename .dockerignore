@@ -1,0 +1,9 @@
+# Keep the build context small: no local envs, caches, or training output.
+venv/
+.venv/
+.git/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+runs/*
+!runs/demo/
