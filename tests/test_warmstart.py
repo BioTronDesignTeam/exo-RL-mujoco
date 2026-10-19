@@ -1,25 +1,64 @@
+import mujoco
 import numpy as np
 import torch
 
 from exo_rl.agents.td3 import Actor, ReplayBuffer, TD3Agent
 from exo_rl.envs.exo_env import EXO_IN_HUMAN, ExoAssistEnv
 from exo_rl.evaluation import run_episode
+from exo_rl.sim.human import HumanController
 from exo_rl.warmstart import causal_teacher, label_episode, mse, train_bc
 
-# Sum over 50 steps of info["tau_human"], recorded before tau_needed was exposed (see below).
-TAU_HUMAN_SUM_REF = np.array([-2666.201628372537, -3949.799064933687, -1898.8467105572,
-                              -2679.67258357634, -3932.748805686538, -1885.024523532451])
+
+def compute_before_tau_needed(self, hm, q_ref, qd_ref, qdd_ref, trunk_ref, trunk_d_ref, v_ref,
+                              tau_exo_human_order, dt):
+    """Frozen copy of HumanController.compute from before tau_needed was exposed."""
+    d = hm.data
+    q = d.qpos[hm.human_qpos]
+    qd = d.qvel[hm.human_dof]
+    e = q_ref - q
+    ed = qd_ref - qd
+    self.integral = np.clip(self.integral + e * dt, -self.i_limit / np.maximum(self.ki, 1e-9),
+                            self.i_limit / np.maximum(self.ki, 1e-9))
+    bias = d.qfrc_bias[hm.human_dof]
+    qdd_des = np.zeros(hm.model.nv)
+    qdd_des[hm.human_dof] = qdd_ref
+    m_qdd = np.zeros(hm.model.nv)
+    mujoco.mj_mulM(hm.model, d, m_qdd, qdd_des)
+    tau_ff = m_qdd[hm.human_dof] + bias
+    tau_needed = tau_ff + self.kp * e + self.kd * ed + self.ki * self.integral
+    tau_h = np.clip(tau_needed - self.beta * tau_exo_human_order, -self.tau_max, self.tau_max)
+    r, s = self.residual, self.mass_scale
+    pitch = d.qpos[hm.root_qpos[2]]
+    xd, pitchd = d.qvel[hm.root_dof[0]], d.qvel[hm.root_dof[2]]
+    f_x = s * r["x_kv"] * (v_ref - xd)
+    t_pitch = s * (r["pitch_kp"] * (trunk_ref - pitch) + r["pitch_kd"] * (trunk_d_ref - pitchd))
+    return tau_h, np.array([f_x, 0.0, t_pitch])
 
 
-def test_tau_needed_exposed_and_human_torques_unchanged(cfg):
+def test_tau_needed_exposed_and_human_torques_unchanged(cfg, monkeypatch):
+    # At every substep, run the current compute() and the frozen copy on the same state and
+    # compare. Platform independent, unlike stored numbers (floating point differs per OS).
+    current = HumanController.compute
+    checked = []
+
+    def compare(self, *args):
+        integral = self.integral.copy()
+        out = current(self, *args)
+        after = self.integral.copy()
+        self.integral = integral
+        ref = compute_before_tau_needed(self, *args)
+        assert np.array_equal(out[0], ref[0]) and np.array_equal(out[1], ref[1])
+        assert np.array_equal(self.integral, after)
+        checked.append(1)
+        return out
+
+    monkeypatch.setattr(HumanController, "compute", compare)
     env = ExoAssistEnv(cfg, seed=0)
     env.reset(seed=0, options={"task": "squat", "nominal": True})
-    tau_sum = np.zeros(6)
     for _ in range(50):
         _, _, _, _, info = env.step(np.array([0.3, -0.2, 0.3, -0.2]))
-        tau_sum += info["tau_human"]
         assert info["tau_needed"].shape == (4,) and np.all(np.isfinite(info["tau_needed"]))
-    np.testing.assert_allclose(tau_sum, TAU_HUMAN_SUM_REF, rtol=1e-6)
+    assert len(checked) == 50 * env.frame_skip
     assert np.allclose(info["tau_needed"], env.tau_needed)
 
     lean = ExoAssistEnv(cfg, seed=0, lean_info=True)
