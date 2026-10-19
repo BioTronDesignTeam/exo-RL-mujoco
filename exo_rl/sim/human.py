@@ -1,4 +1,4 @@
-"""Active human model, Level 1 fidelity (TODO 2).
+"""Active human model, Level 1 fidelity.
 
 The simulated human produces its own joint torques to follow the reference motion:
 

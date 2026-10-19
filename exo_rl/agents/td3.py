@@ -7,7 +7,7 @@ Fine-tuning from a warm start (train.py --init-from) can regularize the actor to
 copy of its initial weights (pi_bc), as in TD3+BC (Fujimoto & Gu, 2021):
     actor_loss = -Q(s, pi(s)) / mean|Q| + w * ||pi(s) - pi_bc(s)||^2
 and can freeze the actor while the fresh critic catches up. Without set_bc_reference() the
-loss is plain -Q, exactly as before.
+loss is the standard TD3 -Q.
 """
 from __future__ import annotations
 
@@ -145,6 +145,8 @@ class TD3Agent:
 
     def update(self, buf: ReplayBuffer, batch_size: int, actor_frozen: bool = False, bc_weight: float = 0.0) -> dict:
         o, a, r, o2, nd = buf.sample(batch_size, self.device)
+        # Critic target y = r + gamma * Q_target(s', a'). TD3 adds noise to a' (target policy
+        # smoothing) and takes the smaller of two critics (clipped double-Q) against overestimation.
         with torch.no_grad():
             a2 = self.actor_t(o2)
             if self.policy_noise > 0:
@@ -161,6 +163,8 @@ class TD3Agent:
 
         info = {"critic_loss": critic_loss.item(), "q_mean": q1.mean().item()}
         self.updates += 1
+        # Delayed policy update: the actor and the target networks change only every policy_delay
+        # critic updates, so the actor follows a critic that has had time to settle.
         if self.updates % self.policy_delay == 0:
             if not actor_frozen:
                 pi = self.actor(o)

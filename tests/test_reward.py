@@ -32,7 +32,7 @@ def test_helpful_torque_reduces_effort(cfg, task, beta):
     assert opposing > 1.05 * off
 
 
-# ---- Unit tests of the reward formula (exo_rl/envs/rewards.py); fast, no simulation. ----
+# Unit tests of the reward formula in exo_rl/envs/rewards.py (fast, no simulation).
 
 W = {"alive": 2.0, "w_effort": 2.0, "w_tracking": 0.3, "tracking_sigma_deg": 10, "w_smooth": 0.5,
      "w_magnitude": 0.05}

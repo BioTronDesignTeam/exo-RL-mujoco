@@ -9,9 +9,9 @@ One iteration of Trainer.run():
     4. store     transitions go into the replay buffer; finished episodes go to episodes.csv
     5. housekeep evaluation (eval.csv, best.pt), latest.pt / step_N.pt, --max-minutes stop
 
-With the default config (num_envs=1, updates_per_step=1.0) the step -> store -> update order
-and every random draw match the original single-env trainer exactly; keep it that way (see
-CONTRIBUTING.md, "Defaults must not change").
+With the default config (num_envs=1, updates_per_step=1.0) training is reproducible bit for bit:
+one env, step -> store -> update, a fixed order of random draws. CONTRIBUTING.md ("Defaults
+must not change") explains how to check that a change keeps it that way.
 
 Warm start (train.py --init-from, usually a bc.pt from pretrain_bc.py): see WarmStartSchedule.
 """
@@ -34,7 +34,6 @@ from .evaluation import FinishedEval, PeriodicEval, eval_score
 from .utils import atomic_write, configure_torch_threads, pick_device
 
 
-# --------------------------------------------------------------------------- helpers
 class CsvLog:
     """Append-friendly CSV writer: the header comes from the first row (or the existing file)."""
 
@@ -127,7 +126,6 @@ class EpisodeLog:
         self.episode += 1
 
 
-# --------------------------------------------------------------------------- trainer
 class Trainer:
     """Builds everything for one run directory and trains. See scripts/train.py for the CLI."""
 
@@ -138,7 +136,8 @@ class Trainer:
         self.snap_dir = os.path.join(run_dir, "resume")
         tr, ag = cfg["train"], cfg["agent"]
 
-        # Seeding and construction order matter for reproducibility; don't reorder.
+        # Keep this order: seeding and object construction consume random numbers, so
+        # reordering them changes training results.
         seed = int(cfg.get("seed", 0))
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -176,9 +175,8 @@ class Trainer:
             self.prefilled = st.get("prefilled", 0)
             np.random.seed(seed + self.start)
             print(f"[train] resumed at step {self.start} (buffer {len(self.buf)})")
-        self.runner = make_runner(cfg, self.num_envs, seed + (self.start if resume else 0))  # fresh seeds
+        self.runner = make_runner(cfg, self.num_envs, seed + (self.start if resume else 0))  # new seeds on resume
 
-        # Learning schedule.
         self.start_steps, self.total_steps = int(tr["start_steps"]), int(tr["total_steps"])
         if self.prefilled >= int(ag["batch_size"]):
             self.start_steps = 0                             # the prefilled buffer replaces the warm-up
@@ -198,7 +196,6 @@ class Trainer:
         self.evaluator.baseline = baseline
         self.episodes = EpisodeLog(ep_csv, self.num_envs, [], episode)
 
-    # ------------------------------------------------------------------ main loop
     def run(self, max_minutes: float | None = None):
         """Train until train.total_steps, max_minutes (then snapshot for --resume), or Ctrl+C."""
         step = self.start - 1                                # transitions collected so far (all envs)
@@ -222,7 +219,7 @@ class Trainer:
                 any_done = self.episodes.add(step, trans, self.upd_info, rate())
                 self._housekeeping(prev, step)
 
-                # One env stops at an episode boundary (as before); with several, mid-episode is fine.
+                # A single env stops only at an episode boundary; parallel envs may stop mid-episode.
                 if max_minutes and time.time() - t0 > 60 * max_minutes and (self.runner.overlap or any_done):
                     print(f"[train] {step - self.start + 1} steps in {(time.time() - t0) / 60:.1f} min "
                           f"({rate():.0f} steps/s incl. evaluation)")
@@ -244,7 +241,6 @@ class Trainer:
         self.agent.save(os.path.join(self.ckpt_dir, "latest.pt"), step)
         print(f"[train] done in {(time.time() - t0) / 60:.1f} min ({rate():.0f} steps/s incl. evaluation)")
 
-    # ------------------------------------------------------------------ steps of the loop
     def _act(self, obs, step):
         if step + 1 <= self.start_steps and not self.init_from:
             return self.runner.sample_actions()              # random warm-up, independent per env
@@ -293,7 +289,6 @@ class Trainer:
                 print(f"[eval ] new best ({score:+.1f}, {self.best_metric})")
         self.evaluator.discard(finished)
 
-    # ------------------------------------------------------------------ resume snapshot
     def _save_snapshot(self, step: int):
         os.makedirs(self.snap_dir, exist_ok=True)
         self.agent.save(os.path.join(self.snap_dir, "agent.pt"))

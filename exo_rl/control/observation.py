@@ -1,7 +1,7 @@
-"""Observation construction, shared by the simulator and the hardware (TODO 3, TODO 4).
+"""Observation construction, shared by the simulator and the hardware.
 
 Input is a raw sensor dict with the same keys in sim (HumanExoModel.sensors()) and on
-hardware (deploy/hardware_interface.py):
+hardware (HardwareInterface.read_sensors in deploy/run_hardware.py):
     q_exo[4], qd_exo[4]           encoder angles / velocities, exo joint order
     trunk_pitch                   trunk pitch estimate from the pelvis IMU
     gyro_{pelvis,thigh_l,thigh_r}[3], acc_{pelvis,thigh_l,thigh_r}[3]

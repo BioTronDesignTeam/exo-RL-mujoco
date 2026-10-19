@@ -1,10 +1,9 @@
 """Builds a sagittal-plane human + exoskeleton MuJoCo model scaled to a subject.
 
 Segment masses and lengths follow Winter's anthropometric ratios, so the model can be
-regenerated per subject (TODO 2: scale the human model to subject anthropometrics).
+regenerated for each subject's height and mass.
 
-Model overview
---------------
+Model overview:
 Root (pelvis/trunk, "HAT" = head-arms-trunk):
     root_x     slide  (free: the body progresses overground, driven by the legs)
     root_z     slide  (UNactuated: body weight must be carried by the legs)
@@ -18,7 +17,7 @@ All torques are applied through data.qfrc_applied so human, exo, and residual
 contributions can be accounted for separately.
 
 The payload (ACE: 25 lb dead weight for a soft exo) is a rigid body attached to the
-trunk, i.e. to the suit, not to the limbs (TODO 5).
+trunk, i.e. to the suit, not to the limbs.
 
 If SubjectParams.exo is set, the CAD exoskeleton's links (mass, inertia, mesh) are mounted
 on the pelvis, thighs, and shanks (see exo_hardware.py).

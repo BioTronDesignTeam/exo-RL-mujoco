@@ -223,7 +223,7 @@ Takeaways (single seed, so treat small differences as noise):
 **Parallel simulation.** `train.num_envs=N` runs N envs in worker processes and overlaps
 their simulation with the gradient updates. On CPU the updates dominate the cost, so pair
 it with `train.updates_per_step` < 1. The default (`num_envs=1`, `updates_per_step=1.0`)
-trains exactly as before. `--max-minutes` / `--resume` work as usual; with N > 1 training may
+is the classic single-env trainer. `--max-minutes` / `--resume` work as usual; with N > 1 training may
 stop mid-episode, and resumed envs get fresh seeds.
 
 **Fine-tune instead of restarting.** After a config change (reward weights, torque limits,

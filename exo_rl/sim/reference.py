@@ -1,7 +1,7 @@
 """Reference motions for the simulated human to perform.
 
 The synthetic motions below are PLACEHOLDERS so the pipeline runs end-to-end before
-real data exists. Replace them with recorded data (TODO 6) by dropping CSV files into
+real data exists. Replace them with recorded data by dropping CSV files into
 data/motions/ (format documented in TabulatedMotion) and setting tasks.data_dir.
 
 Conventions (degrees in CSV / generators, radians everywhere else):
@@ -27,7 +27,7 @@ def _pg(phi, mu, sigma):
     return np.exp(-0.5 * (d / sigma) ** 2)
 
 
-# --- Synthetic single-leg patterns: phi in [0, 1) -> (hip, knee, ankle) in degrees -----------
+# Synthetic single-leg gait patterns: gait phase phi in [0, 1) -> (hip, knee, ankle) angles in degrees.
 
 _LT, _LS = 0.245, 0.246           # Winter thigh/shank length ratios (height cancels out)
 

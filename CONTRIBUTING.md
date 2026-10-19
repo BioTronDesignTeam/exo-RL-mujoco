@@ -72,7 +72,7 @@ is simulation or training.
 
 ## Defaults must not change
 
-With the default config, training must produce **bit-identical** results to the original
+With the default config, training must produce **bit-identical** results to a known-good
 single-env trainer. New features are opt-in config keys or flags. If you touch
 `training.py`, `td3.py`, `exo_env.py` or the human/reward code, check with a short run against
 a known-good commit:

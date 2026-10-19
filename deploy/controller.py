@@ -2,7 +2,7 @@
 
 Uses the SAME ObservationBuilder and ExoTorquePipeline classes as training, configured
 from deploy_config.json, so the network sees identical inputs and its output goes through
-identical feedforward / saturation / rate limiting (TODO 3). The network is fixed: no
+identical feedforward / saturation / rate limiting. The network is fixed: no
 learning happens on the device.
 
 tests/test_consistency.py replays a simulated sensor log through this class and checks

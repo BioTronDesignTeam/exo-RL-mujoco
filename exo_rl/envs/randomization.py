@@ -1,4 +1,4 @@
-"""Domain randomization (TODO 7) including the payload (TODO 5).
+"""Domain randomization, including the payload.
 
 Sampled once per episode. Ranges live in configs/*.yaml under `randomization`.
 Center the actuator/sensor ranges on values measured from your hardware (system ID)

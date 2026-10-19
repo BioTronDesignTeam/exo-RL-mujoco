@@ -1,4 +1,4 @@
-"""Exo torque pipeline, shared by the simulator and the real hardware (TODO 3).
+"""Exo torque pipeline, shared by the simulator and the real hardware.
 
     tau_cmd = alpha * tau_ff(runtime signals) + action_scale * action
     -> direction constraint (e.g. cable can only pull)
@@ -7,7 +7,7 @@
 
 Rules that keep training and deployment identical:
   * Only signals available at runtime are used (measured joint angles, trunk pitch
-    estimate). No recorded/reference data (the old theta_data) enters this pipeline.
+    estimate). No recorded/reference motion data enters this pipeline (the hardware has none).
   * The env and deploy/controller.py both construct this same class from the same config.
   * Hardware must still enforce its own independent torque/rate limits in firmware.
 

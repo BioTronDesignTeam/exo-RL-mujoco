@@ -116,7 +116,6 @@ class ExoHardware:
         self._parts = self._make_parts()
         self._mesh_cache: dict[str, dict] = {}
 
-    # ------------------------------------------------------------------ parts
     def _link_world(self, link):
         b = self.bid(link)
         if b < 0:

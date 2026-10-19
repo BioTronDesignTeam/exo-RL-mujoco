@@ -66,7 +66,6 @@ class ExoAssistEnv(gym.Env):
         self.action_space = gym.spaces.Box(-1.0, 1.0, (4,), np.float32)
         self._build(randomization.nominal(cfg))
 
-    # ------------------------------------------------------------------ setup
     def _build(self, ep: randomization.EpisodeParams):
         self.ep = ep
         sp = SubjectParams(height=ep.height, mass=ep.mass, payload_mass=ep.payload_mass,
@@ -127,7 +126,6 @@ class ExoAssistEnv(gym.Env):
                     s[k] = s[k] + self.rng.normal(0, n["accel"], 3)
         return s
 
-    # ------------------------------------------------------------------ gym API
     def reset(self, *, seed=None, options=None):
         if seed is not None:
             self.rng = np.random.default_rng(seed)

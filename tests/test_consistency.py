@@ -1,4 +1,4 @@
-"""TODO 3: training and deployment must produce identical torques from identical sensors."""
+"""Training and deployment must produce identical torques from identical sensors."""
 import numpy as np
 import torch
 

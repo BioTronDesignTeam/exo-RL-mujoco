@@ -1,4 +1,4 @@
-"""Effort-based reward (TODO 1).
+"""Effort-based reward.
 
     r = alive
         - w_effort    * mean((tau_human / tau_human_max)^2)     primary: human effort
@@ -7,8 +7,8 @@
         - w_magnitude * mean((tau_exo / tau_exo_max)^2)         don't push harder than needed
 
 Notes
-  * The old r_torque = -|T_target - T_user| term is intentionally gone: it only rewarded
-    reproducing the hand-designed feedforward.
+  * There is no term rewarding a match to a hand-designed target torque
+    (-|T_target - T_user|): it would only teach the policy to copy the feedforward.
   * Tracking is secondary. The human model already tracks the reference; this term
     penalises exo torque that knocks the human off their motion (matters when the
     randomized human adaptation beta < 1).

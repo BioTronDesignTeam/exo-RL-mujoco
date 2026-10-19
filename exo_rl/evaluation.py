@@ -74,7 +74,7 @@ def evaluate(env: ExoAssistEnv, policy, tasks, episodes: int = 3, seed0: int = 1
 
 def eval_score(results: dict, metric: str = "mean") -> float:
     """Checkpoint-selection score from evaluate() results.
-    mean:  mean effort reduction - 100 * mean fail rate (the original rule)
+    mean:  mean effort reduction - 100 * mean fail rate (default)
     worst: the same per task, worst task counts (a regression on one task can't hide)"""
     per_task = [v["effort_reduction_pct"] - 100.0 * v["fail_rate"] for v in results.values()]
     if metric == "worst":
