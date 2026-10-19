@@ -1,4 +1,4 @@
-mujoco>=3.1
+mujoco==3.14.0               # pinned: physics differs between versions (results, tests)
 gymnasium>=0.29
 torch>=2.2
 numpy>=1.24
