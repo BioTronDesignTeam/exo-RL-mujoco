@@ -226,6 +226,20 @@ Takeaways (single seed, so treat small differences as noise):
 - With default evaluation settings, the parallel run spent ~40% of its wall time evaluating (177
   vs 294 steps/s); with 1 env it is negligible. Hence `train.eval_every=50000` above.
 
+### Training on a remote machine
+
+Long runs can go on a cloud VM or lab server (Linux, 8–16 CPU cores, no GPU needed), so your
+laptop can be off. After cloning the repo on the machine:
+
+```bash
+bash scripts/remote_train.sh --name ws --minutes 120 --seeds "0 1 2" --detach
+tail -f runs/ws.log                                   # follow progress; safe to log out
+scp -r user@VM_IP:exo-RL-mujoco/runs/ws_s* runs/      # later, from your laptop
+```
+
+It creates the Python environment on first use, then for each seed runs the warm start, RL
+fine-tuning for `--minutes`, and `evaluate.py` (nominal + 5 random pilots). Stop the VM when done.
+
 ### Options
 
 **Parallel simulation.** `train.num_envs=N` runs N envs in worker processes and overlaps
