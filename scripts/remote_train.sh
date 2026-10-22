@@ -2,7 +2,7 @@
 # Train on a remote Linux machine (cloud VM, lab server) so it keeps running while your laptop is off.
 #
 #   bash scripts/remote_train.sh --name ws --minutes 120 --seeds "0 1 2" --detach
-#   bash scripts/remote_train.sh --name fix --set agent.bc_weight_min=0.5   # extra train.py overrides
+#   bash scripts/remote_train.sh --name fix --set agent.bc_weight_min=0.5   # config overrides (warm start + RL)
 #
 # For each seed: warm start (pretrain_bc.py), RL fine-tuning (train.py) for --minutes, then
 # evaluate.py on the nominal pilot and 5 random pilots. Results: runs/<name>_s<seed>/, logs in
@@ -63,7 +63,8 @@ echo "[run] $NAME | seeds: $SEEDS | $MINUTES min RL each | $ENVS parallel envs |
 for SEED in $SEEDS; do
     RUN="${NAME}_s${SEED}"
     echo "[run] seed $SEED: warm start (imitation learning)"
-    "$PY" scripts/pretrain_bc.py --name "${RUN}_bc" --steps "$BC_STEPS" --set seed="$SEED"
+    "$PY" scripts/pretrain_bc.py --name "${RUN}_bc" --steps "$BC_STEPS" --set seed="$SEED" \
+        --set warmstart.num_envs="$ENVS" "${EXTRA[@]}"
 
     echo "[run] seed $SEED: RL fine-tuning for $MINUTES min"
     "$PY" scripts/train.py --name "$RUN" --config "runs/${RUN}_bc/config.yaml" \
