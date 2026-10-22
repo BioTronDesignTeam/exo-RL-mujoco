@@ -37,6 +37,7 @@ def nominal(cfg: dict) -> EpisodeParams:
         human_gain_scale=1.0, exo_adaptation=hum.get("exo_adaptation", 1.0),
         latency_steps=0, torque_noise_frac=0.0,
         sensor_noise={"angle": 0.0, "velocity": 0.0, "gyro": 0.0, "accel": 0.0},
+        exo_mass_scale=float((cfg.get("exo_hardware") or {}).get("mass_scale", 1.0)),
     )
 
 
@@ -64,5 +65,5 @@ def sample(cfg: dict, rng: np.random.Generator) -> EpisodeParams:
     p.latency_steps = int(rng.integers(lo, hi + 1))
     p.torque_noise_frac = float(r.get("torque_noise_frac", 0.0))
     p.sensor_noise = dict(r.get("sensor_noise", p.sensor_noise))
-    p.exo_mass_scale = u("exo_mass_scale", [1.0, 1.0])
+    p.exo_mass_scale *= u("exo_mass_scale", [1.0, 1.0])     # CAD uncertainty around the design mass
     return p

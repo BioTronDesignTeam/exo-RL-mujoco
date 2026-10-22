@@ -71,3 +71,19 @@ def test_exo_feedforward_includes_exo_legs(exo):
     seg = segment_info(SubjectParams())
     lp = exo.limb_params(seg)
     assert lp["thigh_mass"] > seg.thigh_mass + 3.0 and lp["shank_foot_mass"] > seg.shank_foot_mass + 2.0
+
+
+def test_exo_mass_scale_option(cfg):
+    from exo_rl.envs.randomization import nominal, sample
+    assert nominal(cfg).exo_mass_scale == 1.0
+    cfg["exo_hardware"]["mass_scale"] = 0.7
+    assert nominal(cfg).exo_mass_scale == 0.7
+    s = sample(cfg, np.random.default_rng(0)).exo_mass_scale
+    assert 0.7 * 0.95 <= s <= 0.7 * 1.05                       # randomization multiplies on top
+    total = {}
+    for scale, enabled in ((0.7, True), (1.0, True), (1.0, False)):
+        cfg["exo_hardware"].update(mass_scale=scale, enabled=enabled)
+        total[(scale, enabled)] = ExoAssistEnv(cfg, seed=0).hm.model.body_mass.sum()
+    no_exo = total[(1.0, False)]
+    ratio = (total[(0.7, True)] - no_exo) / (total[(1.0, True)] - no_exo)
+    assert abs(ratio - 0.7) < 0.01

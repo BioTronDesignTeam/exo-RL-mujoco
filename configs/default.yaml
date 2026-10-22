@@ -21,6 +21,7 @@ exo_hardware:                # CAD exoskeleton mounted on the human (exo_rl/sim/
   enabled: true
   spec: configs/exo_mk1.yaml
   quality: lo                # lo = light meshes for training; view.py switches to hi
+  mass_scale: 1.0            # scales all exo link masses/inertias ("what if the exo were lighter?")
 
 tasks:
   names: [squat, high_knees, quick_steps, backward_walk, walk]
