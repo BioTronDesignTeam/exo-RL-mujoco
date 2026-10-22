@@ -2,6 +2,7 @@
 # Train on a remote Linux machine (cloud VM, lab server) so it keeps running while your laptop is off.
 #
 #   bash scripts/remote_train.sh --name ws --minutes 120 --seeds "0 1 2" --detach
+#   bash scripts/remote_train.sh --name fix --set agent.bc_weight_min=0.5   # extra train.py overrides
 #
 # For each seed: warm start (pretrain_bc.py), RL fine-tuning (train.py) for --minutes, then
 # evaluate.py on the nominal pilot and 5 random pilots. Results: runs/<name>_s<seed>/, logs in
@@ -15,8 +16,9 @@ SEEDS="0"
 BC_STEPS=80000
 ENVS=""                      # default: half the CPU cores, 2..8
 DETACH=0
+EXTRA=()                     # --set KEY=VALUE overrides passed on to train.py
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --name) NAME="$2"; shift 2 ;;
@@ -25,6 +27,7 @@ while [ $# -gt 0 ]; do
         --bc-steps) BC_STEPS="$2"; shift 2 ;;
         --envs) ENVS="$2"; shift 2 ;;
         --detach) DETACH=1; shift ;;
+        --set) EXTRA+=(--set "$2"); shift 2 ;;
         -h|--help) usage 0 ;;
         *) echo "unknown option: $1"; usage 1 ;;
     esac
@@ -36,7 +39,7 @@ LOG="runs/${NAME}.log"
 
 if [ "$DETACH" = 1 ]; then                    # re-run this script in the background, then return
     nohup bash "$0" --name "$NAME" --minutes "$MINUTES" --seeds "$SEEDS" --bc-steps "$BC_STEPS" \
-        ${ENVS:+--envs "$ENVS"} > "$LOG" 2>&1 &
+        ${ENVS:+--envs "$ENVS"} "${EXTRA[@]}" > "$LOG" 2>&1 &
     echo "Started in the background (PID $!). Follow progress with:  tail -f $LOG"
     exit 0
 fi
@@ -66,7 +69,7 @@ for SEED in $SEEDS; do
     "$PY" scripts/train.py --name "$RUN" --config "runs/${RUN}_bc/config.yaml" \
         --init-from "runs/${RUN}_bc/checkpoints/bc.pt" --init-buffer "runs/${RUN}_bc/checkpoints/bc_buffer.npz" \
         --set train.num_envs="$ENVS" --set train.updates_per_step=0.25 --set train.eval_async=true \
-        --max-minutes "$MINUTES"
+        --max-minutes "$MINUTES" "${EXTRA[@]}"
 
     CKPT=""                                    # best.pt exists once training has been evaluated
     for C in best.pt latest.pt; do

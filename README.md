@@ -261,9 +261,11 @@ python scripts/train.py --name ws --config runs/bc/config.yaml --init-from runs/
 
 With `--init-from`, the `start_steps` warm-up uses the loaded policy (plus exploration noise)
 instead of random actions. Only the critic learns for `agent.actor_freeze_steps`. After that the
-actor loss is `-Q/mean|Q| + w·‖π − π_init‖²`, with `w = agent.bc_weight` decaying to 0 over
-`agent.bc_decay_steps`, so the untrained critic can't wreck the initial policy. These safeguards
-are off unless `--init-from` is used.
+actor loss is `-Q/mean|Q| + w·‖π − π_init‖²`, with `w = agent.bc_weight` decaying to
+`agent.bc_weight_min` over `agent.bc_decay_steps`, so the untrained critic can't wreck the initial
+policy. With the floor at 0, all three 1M-step runs dropped sharply once `w` reached 0;
+`agent.bc_weight_min=0.5` keeps a small pull toward the warm start. These safeguards are off
+unless `--init-from` is used.
 
 **Cheaper settings while iterating** (compare final results before adopting them):
 

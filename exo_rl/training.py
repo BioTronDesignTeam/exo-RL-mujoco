@@ -67,24 +67,28 @@ class WarmStartSchedule:
     Counted in env steps after learning starts (after start_steps):
       [0, freeze_steps)                      only the critic learns
       then for bc_decay_steps                actor loss = -Q/mean|Q| + w * ||pi - pi_init||^2,
-                                             w decays linearly from bc_weight to 0
+                                             w decays linearly from bc_weight to bc_weight_min
+    A floor above 0 keeps a small pull toward the initial policy for the rest of training;
+    with 0, RL alone took over and performance dropped once w reached 0.
     """
     freeze_steps: int = 0
     bc_weight: float = 0.0
     bc_decay_steps: int = 0
+    bc_weight_min: float = 0.0
 
     @classmethod
     def from_config(cls, agent_cfg: dict, active: bool) -> "WarmStartSchedule":
         if not active:
             return cls()
         return cls(int(agent_cfg.get("actor_freeze_steps", 0)), float(agent_cfg.get("bc_weight", 0.0)),
-                   int(agent_cfg.get("bc_decay_steps", 0)))
+                   int(agent_cfg.get("bc_decay_steps", 0)), float(agent_cfg.get("bc_weight_min", 0.0)))
 
     def at(self, learning_steps: int) -> tuple[bool, float]:
         """(actor_frozen, bc_weight) after this many env steps of learning."""
         u = learning_steps - self.freeze_steps          # steps since the actor was unfrozen
         if self.bc_decay_steps > 0:
-            w = self.bc_weight * min(1.0, max(0.0, 1.0 - u / self.bc_decay_steps))
+            frac = min(1.0, max(0.0, 1.0 - u / self.bc_decay_steps))
+            w = self.bc_weight_min + (self.bc_weight - self.bc_weight_min) * frac
         else:
             w = self.bc_weight
         return u <= 0, w
@@ -187,8 +191,8 @@ class Trainer:
         if self.init_from:
             self.upd_info["bc_weight"] = self.warm.bc_weight
             print(f"[train] warm start: actor frozen for {self.warm.freeze_steps} steps, then BC weight "
-                  f"{self.warm.bc_weight:g} -> 0 over {self.warm.bc_decay_steps} steps; start_steps collected "
-                  f"with the initial policy")
+                  f"{self.warm.bc_weight:g} -> {self.warm.bc_weight_min:g} over {self.warm.bc_decay_steps} "
+                  f"steps; start_steps collected with the initial policy")
 
         self.best_metric = tr.get("best_metric", "mean")
         self.evaluator = PeriodicEval(cfg, eval_env, cfg["tasks"]["names"], int(tr["eval_episodes"]),

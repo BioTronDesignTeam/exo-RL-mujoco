@@ -130,6 +130,9 @@ def test_warm_start_schedule():
     assert s.at(50) == (True, 2.0)          # frozen
     assert s.at(200) == (False, 1.0)        # halfway through the decay
     assert s.at(1000) == (False, 0.0)
+    floor = WarmStartSchedule(freeze_steps=100, bc_weight=2.0, bc_decay_steps=200, bc_weight_min=0.5)
+    assert floor.at(200) == (False, 1.25)   # halfway from 2.0 to the 0.5 floor
+    assert floor.at(1000) == (False, 0.5)   # stays at the floor after the decay
 
 
 def test_collector_handles_episode_ending_at_round_end(cfg):
