@@ -28,7 +28,7 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
         obs, r, term, trunc, info = env.step(a)
         ret += r
         t = info["reward_terms"]
-        effort.append(t["effort"])
+        effort.append(t.get("effort_all", t["effort"]))      # whole-body, whatever the reward uses
         err.append(np.degrees(np.sqrt(np.mean((info["q"] - info["q_ref"]) ** 2))))
         dtau.append(np.sqrt(t["smooth"]))
         peak = max(peak, float(np.max(np.abs(info["tau_exo_cmd"]))))

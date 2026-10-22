@@ -81,3 +81,27 @@ def test_default_config_keeps_typical_step_reward_positive(cfg):
     rw = EffortReward(cfg["reward"], np.full(6, 100.0), np.full(4, 40.0))
     r, _ = rw(np.full(6, 0.5), np.full(6, np.radians(5.0)), np.full(4, 20.0), np.full(4, 18.0))
     assert r > 0
+
+
+def test_effort_joints_can_skip_ankles():
+    # Human joint order: hip_l, knee_l, ankle_l, hip_r, knee_r, ankle_r. Only the ankles work hard here.
+    effort_sq = np.array([0.1, 0.1, 0.9, 0.1, 0.1, 0.9])
+    args = (effort_sq, np.zeros(6), np.zeros(4), np.zeros(4))
+    r_all, t_all = make_reward()(*args)
+    r_hk, t_hk = make_reward(effort_joints=["hip", "knee"])(*args)
+    assert np.isclose(t_all["effort"], np.mean(effort_sq)) and "effort_all" not in t_all
+    assert np.isclose(t_hk["effort"], 0.1)                     # ankles ignored by the reward ...
+    assert np.isclose(t_hk["effort_all"], np.mean(effort_sq))   # ... but still reported
+    assert r_hk > r_all
+    with pytest.raises(ValueError, match="selects no joint"):
+        make_reward(effort_joints=["elbow"])
+
+
+def test_evaluation_effort_stays_whole_body(cfg):
+    from exo_rl.evaluation import run_episode
+    cfg["sim"]["episode_seconds"] = 0.3
+    results = []
+    for joints in (["hip", "knee", "ankle"], ["hip", "knee"]):
+        cfg["reward"]["effort_joints"] = joints
+        results.append(run_episode(ExoAssistEnv(cfg, seed=0), None, "squat", "off", seed=1)["effort"])
+    assert np.isclose(results[0], results[1])

@@ -13,7 +13,7 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 52 tests, ~1.5 min — confirms everything works
+python -m pytest                # 54 tests, ~1.5 min — confirms everything works
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
@@ -317,6 +317,7 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 | `tasks.data_dir=data/motions` | Use recorded motion CSVs |
 | `randomization.enabled=false` | Nominal pilot every episode |
 | `reward.w_effort=3.0` | Weight on human effort |
+| `"reward.effort_joints=[hip, knee]"` | Count only exo-assisted joints as effort in the reward (evaluation stays whole-body) |
 | `warmstart.teacher_fraction=0.3` | Warm-start teacher strength (`pretrain_bc.py`) |
 | `agent.bc_weight=2.5` | Pull toward the initial policy when fine-tuning (`--init-from` only) |
 
@@ -340,7 +341,7 @@ exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing 
 scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            52 tests (run by CI on every PR)
+tests/            54 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```
 

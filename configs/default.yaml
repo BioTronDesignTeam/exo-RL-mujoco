@@ -66,6 +66,7 @@ reward:
   tracking_sigma_deg: 10
   w_smooth: 0.5
   w_magnitude: 0.05
+  effort_joints: [hip, knee, ankle]   # joints counted as effort in the reward; [hip, knee] skips ankles
 
 termination:
   max_joint_error_deg: 45
