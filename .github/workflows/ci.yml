@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies (CPU-only PyTorch keeps the install small)
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt pyflakes
+          pip install -r requirements.txt -r requirements-myo.txt pyflakes
 
       - name: Lint (unused imports / undefined names)
         run: python -m pyflakes exo_rl scripts deploy tests

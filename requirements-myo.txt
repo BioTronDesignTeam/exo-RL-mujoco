@@ -1,0 +1,2 @@
+# Optional: musculoskeletal human model (MyoLeg). See exo_rl/sim/myo_model.py.
+myo-sim==0.2.3               # Apache-2.0; model files only, needs mujoco>=3.4
