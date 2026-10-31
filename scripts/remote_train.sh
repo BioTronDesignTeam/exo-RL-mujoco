@@ -3,6 +3,7 @@
 #
 #   bash scripts/remote_train.sh --name ws --minutes 120 --seeds "0 1 2" --detach
 #   bash scripts/remote_train.sh --name fix --set agent.bc_weight_min=0.5   # config overrides (warm start + RL)
+#   bash scripts/remote_train.sh --name myo --set human.model=myo           # MyoLeg muscles (installs myo-sim)
 #
 # For each seed: warm start (pretrain_bc.py), RL fine-tuning (train.py) for --minutes, then
 # evaluate.py on the nominal pilot and 5 random pilots. Results: runs/<name>_s<seed>/, logs in
@@ -18,7 +19,7 @@ ENVS=""                      # default: half the CPU cores, 2..8
 DETACH=0
 EXTRA=()                     # --set KEY=VALUE overrides passed on to train.py
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --name) NAME="$2"; shift 2 ;;
@@ -53,6 +54,10 @@ if [ ! -d venv ]; then
 fi
 PY=venv/bin/python
 [ -x "$PY" ] || PY=venv/Scripts/python.exe
+if printf '%s\n' "${EXTRA[@]}" | grep -q '^human.model=myo$' && ! "$PY" -c "import myo_sim" 2>/dev/null; then
+    echo "[setup] installing the MyoLeg model (requirements-myo.txt)"
+    "$PY" -m pip install -q -r requirements-myo.txt
+fi
 
 if [ -z "$ENVS" ]; then
     CORES=$(nproc 2>/dev/null || echo 4)
