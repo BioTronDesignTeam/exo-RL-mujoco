@@ -17,7 +17,7 @@ python -m pytest                # 54 tests, ~1.5 min — confirms everything wor
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
-- **Musculoskeletal human (in progress):** `pip install -r requirements-myo.txt` adds the MyoLeg model (80 muscles); `python -m exo_rl.sim.myo_model` loads it. `load_myolegs(SubjectParams(...))` adds a rigid upper body (subject mass minus the legs), the payload, and the CAD exo when `exo` is set (links on the pelvis, femurs, and tibias; motors on hip flexion and knee). Not yet used for training.
+- **Musculoskeletal human (in progress):** `pip install -r requirements-myo.txt` adds the MyoLeg model (80 muscles); `python -m exo_rl.sim.myo_model` loads it. `load_myolegs(SubjectParams(...))` adds a rigid upper body (subject mass minus the legs), the payload, and the CAD exo when `exo` is set (links on the pelvis, femurs, and tibias; motors on hip flexion and knee). `exo_rl/sim/muscle_human.py` drives the 80 muscles by static optimization (effort = mean activation²); squats track to ~1.5°, one-leg motions (high knees, quick steps) don't balance yet. Not yet used for training.
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 

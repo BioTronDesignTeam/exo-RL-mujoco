@@ -33,6 +33,9 @@ def myo_models_dir() -> Path:
 EXO_JOINTS = {"hip_l": "hip_flexion_l", "knee_l": "knee_angle_l", "hip_r": "hip_flexion_r", "knee_r": "knee_angle_r"}
 # MyoLeg bodies use OpenSim axes (x forward, y up, z right); the exo snippets use x forward, y left, z up.
 TO_OPENSIM = "0.70711 -0.70711 0 0"
+# MyoLeg faces world -y; turned 90 deg so it faces +x like the planar model (the root frame is then
+# x forward, y left, z up, and root orientation errors read as pitch about y, roll about x).
+FACE_X = "0.70711 0 0 0.70711"
 # Hip centers in the MyoLeg pelvis frame (femur_l/r body pos) and femur length (tibia body pos).
 HIP_CENTER = (-0.056276, -0.07849, 0.07726)
 HIP_TO_PELVIS = 0.07849              # pelvis origin height above the hip centers
@@ -87,8 +90,9 @@ def myolegs_xml(p: SubjectParams | None = None) -> str:
     root = myo_models_dir().as_posix()
     leg = f"{root}/leg/assets"
     chain = f'<include file="{leg}/myolegs_chain.xml"/>'
-    exo_assets = exo_motors = ""
+    exo_assets = exo_motors = option = ""
     if p is not None:
+        option = f'<option timestep="{p.timestep}" integrator="implicitfast"/>'
         text = (myo_models_dir() / "leg/assets/myolegs_chain.xml").read_text(encoding="utf-8")
         inner = text[text.index(">", text.index("<mujocoinclude")) + 1:text.rindex("</mujocoinclude>")]
         chain = _with_subject(inner, p)
@@ -101,13 +105,16 @@ def myolegs_xml(p: SubjectParams | None = None) -> str:
   <include file="{leg}/myolegs_tendon.xml"/>
   <include file="{leg}/myolegs_muscle.xml"/>
   <include file="{leg}/myolegs_assets.xml"/>
+  {option}
   {exo_assets}
   <worldbody>
     <light pos="0 0 3" dir="0 0 -1"/>
     <geom name="floor" type="plane" size="10 10 0.1" rgba=".9 .9 .9 1" conaffinity="1" contype="1"/>
     <body name="root" pos="0 0 1">
       <freejoint name="root"/>
-      {chain}
+      <body name="facing" quat="{FACE_X}">
+        {chain}
+      </body>
     </body>
   </worldbody>
   {exo_motors}

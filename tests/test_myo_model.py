@@ -56,3 +56,34 @@ def test_exo_attaches_to_myolegs():
     for _ in range(500):
         mujoco.mj_step(worn, d)
     assert np.all(np.isfinite(d.qpos))
+
+
+def _track(motion: str, seconds: float):
+    import yaml
+    from exo_rl.sim.muscle_human import MuscleHumanController, stand_on_floor
+    from exo_rl.sim.reference import ReferenceTrajectory, load_motions
+    cfg = yaml.safe_load(open("configs/default.yaml"))
+    m = load_myolegs(SubjectParams(payload_mass=0.0))
+    d = mujoco.MjData(m)
+    ref = ReferenceTrajectory([(load_motions([motion])[motion], 1e9)])
+    q, _, _, trunk, _ = ref.sample(0.0)
+    stand_on_floor(m, d, q, trunk)
+    hc = MuscleHumanController(m, cfg["human"], 75.0)
+    errs, effort = [], []
+    for k in range(int(seconds / m.opt.timestep)):
+        q, qd, qdd, trunk, trunk_d = ref.sample(k * m.opt.timestep)
+        a, _ = hc.compute(d, q, qd, qdd, trunk, trunk_d, 0.0, np.zeros(4), m.opt.timestep)
+        mujoco.mj_step(m, d)
+        errs.append(np.clip(q, hc.q_lo, hc.q_hi) - d.qpos[hc.qadr[:6]])
+        effort.append(hc.effort(a))
+    return np.degrees(np.sqrt(np.mean(np.square(errs)))), np.array(effort), hc
+
+
+def test_muscles_hold_quiet_standing():
+    rms, effort, hc = _track("squat", 0.2)          # the squat starts from standing
+    assert rms < 0.5 and effort.max() < 0.02 and np.all((hc.a >= 0) & (hc.a <= 1))
+
+
+def test_muscles_track_a_squat():
+    rms, effort, _ = _track("squat", 2.5)            # one full squat
+    assert rms < 3.0 and effort.mean() > 0.02        # tracked, and the muscles did the work
