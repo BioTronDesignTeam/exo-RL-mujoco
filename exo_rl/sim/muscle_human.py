@@ -18,16 +18,23 @@ MuJoCo's muscle model. MyoLeg's knee is a coupled mechanism: the tibia translati
 patella follow the knee angle through equality constraints, and the quadriceps act on the knee
 only through the patella. Everything is therefore projected onto the controlled joints with the
 coupling Jacobian C = dq / dq_controlled: torques C^T tau, accelerations C qdd.
-Activations are set directly (activation dynamics bypassed), so the human is as fast as the
-planar one. Torque the muscles can't produce is simply missing: a
+Activations follow MuJoCo's first-order activation dynamics (10 ms rise, 40 ms fall): the
+excitation is chosen to reach the solved activation in one step, clipped to [0, 1]. Torque the muscles can't produce is simply missing: a
 weak or badly placed muscle set shows up as tracking error, not as hidden help.
 
 Effort = mean(a^2) over the 80 muscles, the usual static-optimization cost.
 
+Balance: the reference angles were made for the planar body; on MyoLeg they put the whole-body
+COM 4-6 cm behind the feet. update_balance() slowly (1 s) shifts the posture until the COM sits
+over the middle of the foot contacts: forward by ankle dorsiflexion with equal hip extension,
+sideways by opposite hip adduction. Tracking is against the shifted reference.
+
 Root residuals (NOT human effort), as in human.py: a forward-velocity helper and a trunk
 orientation helper (pitch to the reference, roll and yaw to 0) standing in for the balance
-strategy a leg-only model lacks, plus lateral velocity damping. Vertical is unactuated, so the
-muscles carry body weight + payload.
+strategy a leg-only model lacks, plus lateral velocity damping; with com_damping the velocity
+helpers act on the COM, so a squat's hip shift isn't resisted. Vertical is unactuated, so the
+muscles carry body weight + payload. Helper loads match the planar model's (squat ~50 Nm pitch,
+high knees / quick steps ~200 Nm).
 """
 from __future__ import annotations
 
@@ -42,6 +49,7 @@ HELD = [f"{j}_{s}" for s in "lr" for j in ("hip_adduction", "hip_rotation", "sub
 EXO_IN_TRACKED = [HUMAN_JOINTS.index(j) for j in ("hip_l", "knee_l", "hip_r", "knee_r")]
 DEFAULTS = {"hold_kp": 400.0, "hold_kd": 40.0, "held_weight": 0.3, "activation_reg": 30.0, "solver_iters": 60,
             "activation_dynamics": True, "ground_filter_s": 0.02,
+            "balance": True, "com_damping": True, "balance_tau_s": 1.0, "support_tau_s": 0.2, "balance_max_deg": [15.0, 10.0],
             "residual_roll_kp": 2000.0, "residual_roll_kd": 200.0, "residual_y_kv": 500.0}
 
 
@@ -85,8 +93,20 @@ class MuscleHumanController:
         self.q_lo, self.q_hi = model.jnt_range[[j.id for j in joints[:len(TRACKED)]]].T
         root = model.joint("root")
         self.root_q, self.root_v = model.jnt_qposadr[root.id], model.jnt_dofadr[root.id]
+        self.root_body = model.jnt_bodyid[root.id]
+        self.balance, self.bal_tau, self.sup_tau = bool(c["balance"]), c["balance_tau_s"], c["support_tau_s"]
+        self.bal_max = np.radians(c["balance_max_deg"])
+        self.com_damping = bool(c["com_damping"])
+        self.feet = np.array([i for i in range(model.ngeom)
+                              if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith(("foot", "bofoot"))])
+        self.ankles = [model.joint(f"ankle_angle_{s}").id for s in "lr"]
+
+        sign = {"ankle": 1.0, "hip": -1.0}
+        self.sagittal = np.array([sign.get(j.split("_")[0], 0.0) for j in HUMAN_JOINTS])
+        self.lateral = np.array([{"hip_adduction_l": 1.0, "hip_adduction_r": -1.0}.get(n, 0.0) for n in HELD])
         self.muscles = np.where(model.actuator_dyntype == mujoco.mjtDyn.mjDYN_MUSCLE)[0]
         self.act_adr = model.actuator_actadr[self.muscles]
+        self.tau_act, self.tau_deact = model.actuator_dynprm[self.muscles, 0], model.actuator_dynprm[self.muscles, 1]
         self._moment = np.zeros((model.nu, model.nv))
         # Joint couplings q_dep - q_dep0 = poly(q_ind - q_ind0) whose independent joint is controlled.
         col = {int(model.dof_jntid[k]): i for i, k in enumerate(self.dof)}
@@ -105,6 +125,8 @@ class MuscleHumanController:
         self.integral = np.zeros(len(self.dof))
         self.a = np.zeros(len(self.muscles))
         self.f_ground = None
+        self.support = None
+        self.lean = np.zeros(2)              # balance offsets: forward (ankle/hip), sideways (hip adduction), rad
 
     def coupling(self, d: mujoco.MjData) -> np.ndarray:
         """C = dq / dq_controlled (nv x controlled joints)."""
@@ -131,6 +153,24 @@ class MuscleHumanController:
         R = self._moment[self.muscles] @ C                         # muscles x controlled joints
         return R.T * gain, R.T @ f0
 
+    def update_balance(self, d: mujoco.MjData, dt: float):
+        """Slowly shifts the posture so the whole-body COM sits over the middle of the foot contacts.
+        Forward: ankle dorsiflexion with equal hip extension (shanks and thighs tilt, pelvis keeps its
+        pitch). Sideways: opposite hip adduction on the two legs (pelvis slides over the feet)."""
+        con = d.contact
+        on_floor = np.isin(con.geom1[:d.ncon], self.feet) | np.isin(con.geom2[:d.ncon], self.feet)
+        if on_floor.any():
+            sup = con.pos[:d.ncon][on_floor, :2].mean(axis=0)
+            self.support = sup if self.support is None else self.support + min(dt / self.sup_tau, 1.0) * (sup - self.support)
+        if self.support is None:
+            return
+        R = d.xmat[self.root_body].reshape(3, 3)
+        heading = R[:2, 0] / max(np.linalg.norm(R[:2, 0]), 1e-9)
+        gap = self.support - d.subtree_com[self.root_body][:2]
+        gap = np.array([gap @ heading, gap @ np.array([-heading[1], heading[0]])])   # forward, left
+        height = max(d.subtree_com[self.root_body][2] - np.mean(d.xanchor[self.ankles, 2]), 0.3)
+        self.lean = np.clip(self.lean + (dt / self.bal_tau) * gap / height, -self.bal_max, self.bal_max)
+
     def compute(self, d: mujoco.MjData, q_ref, qd_ref, qdd_ref, trunk_ref, trunk_d_ref, v_ref: float,
                 tau_exo: np.ndarray, dt: float) -> tuple[np.ndarray, np.ndarray]:
         """Sets the muscle activations and the root residual (qfrc_applied).
@@ -138,7 +178,11 @@ class MuscleHumanController:
         six tracked joints in HUMAN_JOINTS order)."""
         m = self.model
         n = len(TRACKED)
-        q_des = np.concatenate([np.clip(q_ref, self.q_lo, self.q_hi), np.zeros(len(HELD))])
+        if self.balance:
+            self.update_balance(d, dt)
+        q_bal = np.asarray(q_ref) + self.lean[0] * self.sagittal
+        q_des = np.concatenate([np.clip(q_bal, self.q_lo, self.q_hi), self.lean[1] * self.lateral])
+        self.q_target = q_des[:n].copy()                         # what the six joints track (for logging)
         qd_des = np.concatenate([qd_ref, np.zeros(len(HELD))])
         e, ed = q_des - d.qpos[self.qadr], qd_des - d.qvel[self.dof]
         lim = self.i_limit / np.maximum(self.ki, 1e-9)
@@ -161,15 +205,20 @@ class MuscleHumanController:
         A, tau_passive = self.muscle_torque_model(d, C)
         w = self.row_w[:, None]
         self.a = solve_activations(w * A, self.row_w * (tau_h - tau_passive), self.reg, self.a, self.iters)
-        d.ctrl[self.muscles] = self.a
-        if self.act_dyn:                                        # excitation; MuJoCo's activation lag follows
-            self.a = d.act[self.act_adr].copy()
+        if self.act_dyn:
+            act = d.act[self.act_adr].copy()
+            d.ctrl[self.muscles] = self.excitation(act, self.a, dt)
+            self.a = act                                         # effort and torque use the real activation
         else:
+            d.ctrl[self.muscles] = self.a
             d.act[self.act_adr] = self.a
         tau_muscle = A @ self.a + tau_passive
 
         r, s = self.residual, self.mass_scale
-        v = d.qvel[self.root_v:self.root_v + 6]
+        v = d.qvel[self.root_v:self.root_v + 6].copy()
+        if self.balance and self.com_damping:                  # damp the COM, not the pelvis
+            mujoco.mj_subtreeVel(m, d)
+            v[:2] = d.subtree_linvel[self.root_body][:2]
         q_des_root = np.zeros(4)
         mujoco.mju_axisAngle2Quat(q_des_root, np.array([0.0, 1.0, 0.0]), trunk_ref)
         rot_err = np.zeros(3)
@@ -177,9 +226,18 @@ class MuscleHumanController:
         w_des = np.array([0.0, trunk_d_ref, 0.0])
         kp = np.array([r["residual_roll_kp"], r["pitch_kp"], r["residual_roll_kp"]])
         kd = np.array([r["residual_roll_kd"], r["pitch_kd"], r["residual_roll_kd"]])
-        d.qfrc_applied[self.root_v:self.root_v + 6] = s * np.concatenate([
+        self.root_residual = s * np.concatenate([
             [r["x_kv"] * (v_ref - v[0]), r["residual_y_kv"] * -v[1], 0.0], kp * rot_err + kd * (w_des - v[3:])])
+        d.qfrc_applied[self.root_v:self.root_v + 6] = self.root_residual
         return self.a, tau_muscle[:n]
+
+    def excitation(self, act: np.ndarray, target: np.ndarray, dt: float) -> np.ndarray:
+        """Excitation that brings each activation to target within one step under MuJoCo's first-order
+        muscle activation dynamics (rise tau_act*(0.5+1.5a), fall tau_deact/(0.5+1.5a)); clipped to
+        [0, 1], so activations still can't change faster than the muscle allows."""
+        rising = target > act
+        tau = np.where(rising, self.tau_act * (0.5 + 1.5 * act), self.tau_deact / (0.5 + 1.5 * act))
+        return np.clip(act + tau * (target - act) / dt, 0.0, 1.0)
 
     @staticmethod
     def effort(a: np.ndarray) -> float:
