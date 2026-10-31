@@ -2,12 +2,14 @@
 
 First step of the musculoskeletal integration: load the MyoLeg model (bilateral legs + pelvis,
 80 muscle-tendon units, derived from Rajagopal et al.'s gait model) so it can later replace the
-torque-driven human in exo_rl/sim/human.py. Pass an ExoHardware to attach the CAD exo: its links
-ride on the pelvis, femurs, and tibias, and four motors drive hip flexion and knee flexion.
+torque-driven human in exo_rl/sim/human.py. Given SubjectParams it adds a rigid upper body and the
+payload on the pelvis, and the CAD exo if p.exo is set: its links ride on the pelvis, femurs, and
+tibias, and four motors drive hip flexion and knee flexion.
 
 The myo-sim package ships the model's parts (bone chain, muscles, tendons, mesh assets) but no
 top-level file; myolegs_xml() assembles them the same way MyoSuite's myolegs_with_torso.xml
-does, on our own floor and without MyoSuite's rigid torso (not part of the pip package).
+does, on our own floor; MyoSuite's torso is not part of the pip package, so ours is a capsule
+sized like the planar model's trunk.
 
 Install: pip install -r requirements-myo.txt   (myo-sim, Apache-2.0, needs mujoco >= 3.4)
 """
@@ -17,6 +19,8 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+
+from exo_rl.sim.model_builder import TRUNK_LEN_FRAC, SubjectParams
 
 
 def myo_models_dir() -> Path:
@@ -31,39 +35,65 @@ EXO_JOINTS = {"hip_l": "hip_flexion_l", "knee_l": "knee_angle_l", "hip_r": "hip_
 TO_OPENSIM = "0.70711 -0.70711 0 0"
 # Hip centers in the MyoLeg pelvis frame (femur_l/r body pos) and femur length (tibia body pos).
 HIP_CENTER = (-0.056276, -0.07849, 0.07726)
+HIP_TO_PELVIS = 0.07849              # pelvis origin height above the hip centers
 FEMUR_LEN = 0.404425
+MYOLEGS_MASS = 37.8227               # legs + pelvis, kg
 
 
-def _exo_frame(name: str, pos: str, children: str) -> str:
+def _frame(name: str, pos: str, children: str) -> str:
+    """Child body in the planar model's axes (x forward, y left, z up)."""
     return f'\n<body name="{name}" pos="{pos}" quat="{TO_OPENSIM}">{children}</body>'
 
 
-def _with_exo(chain: str, exo, mass_scale: float, quality: str) -> str:
-    """MyoLeg bone chain with the exo links inserted as the first children of the matching bones."""
-    _, bodies = exo.mjcf_snippets(FEMUR_LEN, mass_scale, quality, hip_half_width=HIP_CENTER[2])
+def _hip_frame(p: SubjectParams, exo_pelvis: str) -> str:
+    """Rigid upper body, payload, and exo pelvis parts, in a frame at the hip centers' midpoint
+    (the planar model's pelvis origin, so payload offsets and exo parts carry over unchanged)."""
+    torso_mass = p.mass - MYOLEGS_MASS
+    if torso_mass <= 0:
+        raise ValueError(f"subject mass {p.mass} kg must exceed the MyoLeg legs + pelvis ({MYOLEGS_MASS:.1f} kg)")
+    l_trunk = TRUNK_LEN_FRAC * p.height
+    torso = (f'<geom name="torso" type="capsule" fromto="0 0 {HIP_TO_PELVIS:.4f} 0 0 {l_trunk:.4f}" '
+             f'size="{0.12 * p.height / 1.75:.4f}" mass="{torso_mass:.4f}" contype="0" conaffinity="0" '
+             f'rgba=".5 .6 .8 1"/>')
+    payload = ""
+    if p.payload_mass > 0:
+        ox, oy, oz = p.payload_offset
+        payload = (f'<body name="payload" pos="{ox:.4f} {oy:.4f} {oz:.4f}"><geom type="box" size="0.08 0.12 0.10" '
+                   f'mass="{p.payload_mass:.4f}" contype="0" conaffinity="0" rgba=".9 .2 .2 1"/></body>')
     hx, hy, _ = HIP_CENTER
-    attach = {"pelvis": ("pelvis", f"{hx} {hy} 0"),
-              "femur_l": ("thigh_l", "0 0 0"), "femur_r": ("thigh_r", "0 0 0"),
-              "tibia_l": ("shank_l", "0 0 0"), "tibia_r": ("shank_r", "0 0 0")}
-    for bone, (part, pos) in attach.items():
+    return _frame("hip_frame", f"{hx} {hy} 0", torso + payload + exo_pelvis)
+
+
+def _with_subject(chain: str, p: SubjectParams) -> str:
+    """MyoLeg bone chain with the upper body and exo inserted as the first children of the matching bones."""
+    bodies = {}
+    if p.exo is not None:
+        _, bodies = p.exo.mjcf_snippets(FEMUR_LEN, p.exo_mass_scale, p.exo_quality, hip_half_width=HIP_CENTER[2])
+    inserts = {"pelvis": _hip_frame(p, bodies.get("pelvis", ""))}
+    if p.exo is not None:
+        for bone, part in (("femur_l", "thigh_l"), ("femur_r", "thigh_r"), ("tibia_l", "shank_l"), ("tibia_r", "shank_r")):
+            inserts[bone] = _frame(f"exo_frame_{part}", "0 0 0", bodies.get(part, ""))
+    for bone, xml in inserts.items():
         start = chain.index(f'<body name="{bone}"')
         end = chain.index(">", start) + 1
-        chain = chain[:end] + _exo_frame(f"exo_frame_{part}", pos, bodies.get(part, "")) + chain[end:]
+        chain = chain[:end] + xml + chain[end:]
     return chain
 
 
-def myolegs_xml(exo=None, exo_mass_scale: float = 1.0, exo_quality: str = "lo") -> str:
-    """Top-level MJCF for MyoLeg (legs + pelvis) with a free-floating pelvis on a flat floor,
-    optionally wearing the exo (an ExoHardware)."""
+def myolegs_xml(p: SubjectParams | None = None) -> str:
+    """Top-level MJCF for MyoLeg with a free-floating pelvis on a flat floor. With SubjectParams it also
+    gets a rigid upper body (subject mass minus the legs), the payload, and the exo if p.exo is set;
+    without, it is the bare legs + pelvis."""
     root = myo_models_dir().as_posix()
     leg = f"{root}/leg/assets"
     chain = f'<include file="{leg}/myolegs_chain.xml"/>'
     exo_assets = exo_motors = ""
-    if exo is not None:
+    if p is not None:
         text = (myo_models_dir() / "leg/assets/myolegs_chain.xml").read_text(encoding="utf-8")
         inner = text[text.index(">", text.index("<mujocoinclude")) + 1:text.rindex("</mujocoinclude>")]
-        chain = _with_exo(inner, exo, exo_mass_scale, exo_quality)
-        exo_assets = "<asset>\n" + exo.mjcf_snippets(FEMUR_LEN, exo_mass_scale, exo_quality)[0] + "\n  </asset>"
+        chain = _with_subject(inner, p)
+    if p is not None and p.exo is not None:
+        exo_assets = "<asset>\n" + p.exo.mjcf_snippets(FEMUR_LEN, p.exo_mass_scale, p.exo_quality)[0] + "\n  </asset>"
         exo_motors = "<actuator>\n" + "\n".join(
             f'    <motor name="exo_{j}" joint="{joint}" gear="1"/>' for j, joint in EXO_JOINTS.items()) + "\n  </actuator>"
     return f"""<mujoco model="myoleg_exo_rl">
@@ -84,12 +114,12 @@ def myolegs_xml(exo=None, exo_mass_scale: float = 1.0, exo_quality: str = "lo") 
 </mujoco>"""
 
 
-def load_myolegs(exo=None, exo_mass_scale: float = 1.0, exo_quality: str = "lo") -> mujoco.MjModel:
-    xml = myolegs_xml(exo, exo_mass_scale, exo_quality)
-    if exo is None:
+def load_myolegs(p: SubjectParams | None = None) -> mujoco.MjModel:
+    xml = myolegs_xml(p)
+    if p is None or p.exo is None:
         return mujoco.MjModel.from_xml_string(xml)
     root = myo_models_dir().as_posix()           # exo meshes are looked up under MyoLeg's meshdir
-    assets = {f"{root}/{k}": v for k, v in exo.meshes(exo_quality).items()}
+    assets = {f"{root}/{k}": v for k, v in p.exo.meshes(p.exo_quality).items()}
     return mujoco.MjModel.from_xml_string(xml, assets)
 
 
