@@ -22,7 +22,7 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
                 nominal: bool = True):
     obs, _ = env.reset(seed=seed, options={"exo_mode": mode, "task": task, "nominal": nominal})
     effort, err, dtau, peak, ret = [], [], [], 0.0, 0.0
-    trace = []
+    trace, groups = [], []
     while True:
         a = policy(obs) if (policy is not None and mode == "policy") else np.zeros(4)
         obs, r, term, trunc, info = env.step(a)
@@ -32,6 +32,8 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
         err.append(np.degrees(np.sqrt(np.mean((info["q"] - info["q_ref"]) ** 2))))
         dtau.append(np.sqrt(t["smooth"]))
         peak = max(peak, float(np.max(np.abs(info["tau_exo_cmd"]))))
+        if "muscle_groups" in info:
+            groups.append(info["muscle_groups"])
         if record:
             trace.append({k: info[k] for k in ("q", "q_ref", "tau_human", "tau_exo_cmd", "phase", "task")})
         if term or trunc:
@@ -41,19 +43,26 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
         "effort": float(np.mean(effort)), "tracking_rms_deg": float(np.mean(err)),
         "peak_exo_torque": peak, "smoothness": float(np.mean(dtau)),
     }
+    for g in (groups[0] if groups else {}):              # muscle model: mean activation per group
+        out[f"act_{g}"] = float(np.mean([x[g] for x in groups]))
     return (out, trace) if record else out
 
 
-def no_exo_effort(cfg: dict, tasks, episodes: int = 3, seed0: int = 1000, nominal: bool = True) -> dict:
-    """Effort of the pilot NOT wearing the exo (the ACE comparison); {} if no CAD exo is mounted."""
+def no_exo_effort(cfg: dict, tasks, episodes: int = 3, seed0: int = 1000, nominal: bool = True,
+                  details: bool = False) -> dict:
+    """Effort of the pilot NOT wearing the exo (the ACE comparison); {} if no CAD exo is mounted.
+    details=True returns, per task, the mean of every episode metric (incl. act_<group>) instead."""
     if not (cfg.get("exo_hardware") or {}).get("enabled"):
         return {}
     cfg0 = copy.deepcopy(cfg)
     cfg0["exo_hardware"]["enabled"] = False
     env0 = ExoAssistEnv(cfg0, seed=0)
-    return {t: float(np.mean([run_episode(env0, None, t, "off", seed0 + i, nominal=nominal)["effort"]
-                              for i in range(episodes)]))
-            for t in tasks}
+    out = {}
+    for t in tasks:
+        eps = [run_episode(env0, None, t, "off", seed0 + i, nominal=nominal) for i in range(episodes)]
+        out[t] = ({k: float(np.mean([e[k] for e in eps])) for k in eps[0]} if details
+                  else float(np.mean([e["effort"] for e in eps])))
+    return out
 
 
 def evaluate(env: ExoAssistEnv, policy, tasks, episodes: int = 3, seed0: int = 1000, baseline=None):

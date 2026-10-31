@@ -22,7 +22,12 @@ Activations follow MuJoCo's first-order activation dynamics (10 ms rise, 40 ms f
 excitation is chosen to reach the solved activation in one step, clipped to [0, 1]. Torque the muscles can't produce is simply missing: a
 weak or badly placed muscle set shows up as tracking error, not as hidden help.
 
-Effort = mean(a^2) over the 80 muscles, the usual static-optimization cost.
+Effort (config muscle.effort):
+    mean               mean(a^2) over the 80 muscles, the usual static-optimization cost; every
+                       muscle counts the same, so a small shin muscle weighs as much as a vastus
+    strength_weighted  sum(F0 a^2) / sum(F0), F0 = each muscle's peak isometric force; big muscles
+                       count in proportion to their size
+group_activation() gives the mean activation per muscle group (quads, glutes, ...) for reports.
 
 Balance: the reference angles were made for the planar body; on MyoLeg they put the whole-body
 COM 4-6 cm behind the feet. update_balance() slowly (1 s) shifts the posture until the COM sits
@@ -47,7 +52,18 @@ TRACKED = {"hip_l": "hip_flexion_l", "knee_l": "knee_angle_l", "ankle_l": "ankle
            "hip_r": "hip_flexion_r", "knee_r": "knee_angle_r", "ankle_r": "ankle_angle_r"}
 HELD = [f"{j}_{s}" for s in "lr" for j in ("hip_adduction", "hip_rotation", "subtalar_angle", "mtp_angle")]
 EXO_IN_TRACKED = [HUMAN_JOINTS.index(j) for j in ("hip_l", "knee_l", "hip_r", "knee_r")]
-DEFAULTS = {"hold_kp": 400.0, "hold_kd": 40.0, "held_weight": 0.3, "activation_reg": 30.0, "solver_iters": 60,
+# Muscle groups for reporting, by MyoLeg muscle name prefix (each muscle in exactly one group).
+MUSCLE_GROUPS = {
+    "quads": ("recfem", "vasint", "vaslat", "vasmed"),
+    "glutes": ("glmax", "glmed", "glmin"),
+    "adductors": ("addbrev", "addlong", "addmag", "grac"),
+    "hamstrings": ("bflh", "bfsh", "semimem", "semiten"),
+    "hip_flexors": ("iliacus", "psoas", "sart", "tfl"),
+    "calf": ("gaslat", "gasmed", "soleus"),
+    "shin": ("tibant", "edl", "ehl"),
+    "foot_other": ("fdl", "fhl", "perbrev", "perlong", "tibpost", "piri"),
+}
+DEFAULTS = {"effort": "mean", "hold_kp": 400.0, "hold_kd": 40.0, "held_weight": 0.3, "activation_reg": 30.0, "solver_iters": 60,
             "activation_dynamics": True, "ground_filter_s": 0.02,
             "balance": True, "com_damping": True, "balance_tau_s": 1.0, "support_tau_s": 0.2, "balance_max_deg": [15.0, 10.0],
             "residual_roll_kp": 2000.0, "residual_roll_kd": 200.0, "residual_y_kv": 500.0}
@@ -109,6 +125,18 @@ class MuscleHumanController:
         self.lateral = np.array([{"hip_adduction_l": 1.0, "hip_adduction_r": -1.0}.get(n, 0.0) for n in HELD])
         self.muscles = np.where(model.actuator_dyntype == mujoco.mjtDyn.mjDYN_MUSCLE)[0]
         self.act_adr = model.actuator_actadr[self.muscles]
+        names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in self.muscles]
+        self.groups = {g: np.array([i for i, n in enumerate(names) if n.startswith(prefixes)])
+                       for g, prefixes in MUSCLE_GROUPS.items()}
+        if sum(len(v) for v in self.groups.values()) != len(names):
+            raise ValueError("MUSCLE_GROUPS does not cover every muscle exactly once")
+        f0 = model.actuator_gainprm[self.muscles, 2]
+        if c["effort"] == "mean":
+            self.effort_w = np.full(len(names), 1.0 / len(names))
+        elif c["effort"] == "strength_weighted":
+            self.effort_w = f0 / f0.sum()
+        else:
+            raise ValueError(f"human.muscle.effort must be mean or strength_weighted, not {c['effort']!r}")
         self.tau_act, self.tau_deact = model.actuator_dynprm[self.muscles, 0], model.actuator_dynprm[self.muscles, 1]
         self._moment = np.zeros((model.nu, model.nv))
         # Joint couplings q_dep - q_dep0 = poly(q_ind - q_ind0) whose independent joint is controlled.
@@ -245,9 +273,12 @@ class MuscleHumanController:
         tau = np.where(rising, self.tau_act * (0.5 + 1.5 * act), self.tau_deact / (0.5 + 1.5 * act))
         return np.clip(act + tau * (target - act) / dt, 0.0, 1.0)
 
-    @staticmethod
-    def effort(a: np.ndarray) -> float:
-        return float(np.mean(a ** 2))
+    def effort(self, a: np.ndarray) -> float:
+        return float(self.effort_w @ (a ** 2))
+
+    def group_activation(self, a: np.ndarray) -> np.ndarray:
+        """Mean activation per muscle group, in MUSCLE_GROUPS order."""
+        return np.array([a[ii].mean() for ii in self.groups.values()])
 
 
 def satisfy_couplings(model: mujoco.MjModel, d: mujoco.MjData):

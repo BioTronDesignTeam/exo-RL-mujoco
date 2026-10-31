@@ -197,6 +197,7 @@ class ExoAssistEnv(gym.Env):
         tau_h_sum = np.zeros(6)
         tau_needed_sum = np.zeros(6)
         resid_sum = np.zeros(3)
+        groups_sum = 0.0
         for k in range(self.frame_skip):
             ts = self.t + k * dt
             q, qd, qdd, trunk, trunk_d = self.ref.sample(ts)
@@ -211,6 +212,7 @@ class ExoAssistEnv(gym.Env):
                 tau_res = self.human.root_residual[[0, 2, 4]]           # x, z, pitch, as the planar model's
                 mujoco.mj_step(m, d)
                 effort_sq += self.human.effort(act)
+                groups_sum = groups_sum + self.human.group_activation(act)
             else:
                 tau_h, tau_res = self.human.compute(hm, q, qd, qdd, trunk, trunk_d, self._v_ref(ts),
                                                     self.human_felt_exo, dt)
@@ -264,4 +266,7 @@ class ExoAssistEnv(gym.Env):
             "tau_needed": self.tau_needed,
             "terminated_reason": reason,
         }
+        if self.myo:                         # mean activation per muscle group over the control step
+            from ..sim.muscle_human import MUSCLE_GROUPS
+            info["muscle_groups"] = dict(zip(MUSCLE_GROUPS, groups_sum / self.frame_skip))
         return obs, float(reward), terminated, truncated, info

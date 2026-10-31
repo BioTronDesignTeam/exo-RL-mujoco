@@ -128,3 +128,29 @@ def test_myo_env_rejects_partial_effort_joints():
     cfg["reward"]["effort_joints"] = ["hip", "knee"]
     with pytest.raises(ValueError):
         ExoAssistEnv(cfg, seed=0)
+
+
+def test_effort_metrics_and_muscle_groups():
+    import yaml
+    from exo_rl.sim.muscle_human import MUSCLE_GROUPS, MuscleHumanController
+    cfg = yaml.safe_load(open("configs/default.yaml"))["human"]
+    m = load_myolegs(SubjectParams(payload_mass=0.0))
+    mean = MuscleHumanController(m, cfg, 75.0)
+    weighted = MuscleHumanController(m, {**cfg, "muscle": {"effort": "strength_weighted"}}, 75.0)
+    a = np.zeros(len(mean.muscles))
+    a[mean.groups["quads"]] = 1.0                    # only the (big) quads active
+    assert np.isclose(mean.effort(a), len(mean.groups["quads"]) / len(a))
+    assert weighted.effort(a) > mean.effort(a)       # strength weighting counts big muscles more
+    g = mean.group_activation(a)
+    assert g[list(MUSCLE_GROUPS).index("quads")] == 1.0 and g.sum() == 1.0
+    with pytest.raises(ValueError):
+        MuscleHumanController(m, {**cfg, "muscle": {"effort": "nope"}}, 75.0)
+
+
+def test_env_reports_muscle_groups():
+    from exo_rl.sim.muscle_human import MUSCLE_GROUPS
+    env, _ = _myo_env()
+    env.reset(seed=0, options={"nominal": True, "task": "squat"})
+    _, _, _, _, info = env.step(np.zeros(4))
+    assert list(info["muscle_groups"]) == list(MUSCLE_GROUPS)
+    assert all(0 <= v <= 1 for v in info["muscle_groups"].values())

@@ -47,6 +47,7 @@ human:                       # Level-1 active human model (see exo_rl/sim/human.
   exo_adaptation: 1.0                             # beta: 1 = human fully offloads exo torque
   residual: {x_kv: 500, pitch_kp: 2000, pitch_kd: 200}
   muscle:                    # human.model: myo only (exo_rl/sim/muscle_human.py)
+    effort: mean             # mean: mean activation^2 | strength_weighted: weighted by muscle peak force
     hold_kp: 400.0           # hip adduction/rotation, subtalar, MTP held at 0 (or the balance shift)
     hold_kd: 40.0
     held_weight: 0.3         # their weight in the activation solve, vs. 1 for the six tracked joints

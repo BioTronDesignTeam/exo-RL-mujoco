@@ -3,14 +3,17 @@
     python scripts/evaluate.py --run runs/demo                 # uses best.pt
     python scripts/evaluate.py --run runs/demo --ckpt latest.pt --episodes 5
     python scripts/evaluate.py --run runs/demo --randomized 10     # + 10 random pilots per task
+    python scripts/evaluate.py --run runs/demo --set human.model=myo --tag myo   # on the muscle model
 
-Writes to runs/<name>/eval_<ckpt>/:
+Writes to runs/<name>/eval_<ckpt>[_<tag>]/:
     summary.csv                per task and mode: effort, reduction vs off, tracking, torques
                                (+ "net_vs_no_exo_pct" when a CAD exo is mounted: the ACE-style
                                comparison against the pilot NOT wearing the exo at all)
     effort_by_task.png         human effort with/without exo (the ACE-relevant plot)
     gait_<task>.png            hip/knee angle vs % cycle (sim vs reference) and human torque
                                with/without exo, for each cyclic task
+    muscle_groups.csv          muscle model (human.model: myo): mean activation per muscle group
+                               (quads, glutes, ..., shin) for no exo / exo off / policy
     summary_randomized.csv     with --randomized N: the same comparison over N fixed random
                                pilots (body size, strength, latency, noise...), one episode each
 """
@@ -96,6 +99,32 @@ def nominal_table(env, policy, tasks, episodes, no_exo):
     return rows, traces
 
 
+def muscle_group_table(rows, no_exo_full):
+    """Per task and muscle group: mean activation with no exo / exo off / policy."""
+    out = []
+    by = {(r["task"], r["mode"]): r for r in rows}
+    for task in dict.fromkeys(r["task"] for r in rows):
+        for key in [k for k in rows[0] if k.startswith("act_")]:
+            row = {"task": task, "group": key[4:]}
+            if no_exo_full:
+                row["no_exo"] = round(no_exo_full[task][key], 4)
+            for mode in MODES:
+                row[mode] = by[(task, mode)][key]
+            if no_exo_full:
+                row["policy_vs_no_exo_pct"] = round(100.0 * (row["policy"] / max(row["no_exo"], 1e-9) - 1), 1)
+            out.append(row)
+    return out
+
+
+def print_muscle_groups(group_rows):
+    note = " (policy vs no exo: + = works harder)" if "no_exo" in group_rows[0] else ""
+    print("\nmean muscle activation per group" + note)
+    for r in group_rows:
+        base = f"no exo {r['no_exo']:.3f}  " if "no_exo" in r else ""
+        diff = f"  {r['policy_vs_no_exo_pct']:+6.1f}%" if "policy_vs_no_exo_pct" in r else ""
+        print(f"  {r['task']:14s} {r['group']:12s} {base}" + "  ".join(f"{m} {r[m]:.3f}" for m in MODES) + diff)
+
+
 def write_csv(rows, path):
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -165,20 +194,28 @@ def main():
     ap.add_argument("--episodes", type=int, default=3)
     ap.add_argument("--randomized", type=int, default=0, metavar="N",
                     help="also evaluate on N random pilots (tests adaptation across people)")
+    ap.add_argument("--set", action="append", default=[],
+                    help="config override on top of the run's config, e.g. human.model=myo")
+    ap.add_argument("--tag", default="", help="suffix for the output folder, e.g. myo -> eval_best_myo")
     args = ap.parse_args()
 
-    cfg = load_config(os.path.join(args.run, "config.yaml"))
+    cfg = load_config(os.path.join(args.run, "config.yaml"), args.set)
     agent = TD3Agent.load(os.path.join(args.run, "checkpoints", args.ckpt))
     policy = lambda o: agent.act(o, 0.0)  # noqa: E731
     env = ExoAssistEnv(cfg, seed=0)
     tasks = cfg["tasks"]["names"]
-    out_dir = os.path.join(args.run, f"eval_{os.path.splitext(args.ckpt)[0]}")
+    out_dir = os.path.join(args.run, f"eval_{os.path.splitext(args.ckpt)[0]}" + (f"_{args.tag}" if args.tag else ""))
     os.makedirs(out_dir, exist_ok=True)
 
-    no_exo = no_exo_effort(cfg, tasks, args.episodes, seed0=2000)
+    no_exo_full = no_exo_effort(cfg, tasks, args.episodes, seed0=2000, details=True)
+    no_exo = {t: v["effort"] for t, v in no_exo_full.items()}
     rows, traces = nominal_table(env, policy, tasks, args.episodes, no_exo)
     write_csv(rows, os.path.join(out_dir, "summary.csv"))
     print_nominal(rows, no_exo)
+    if any(k.startswith("act_") for k in rows[0]):
+        group_rows = muscle_group_table(rows, no_exo_full)
+        write_csv(group_rows, os.path.join(out_dir, "muscle_groups.csv"))
+        print_muscle_groups(group_rows)
     if args.randomized:
         randomized_table(env, cfg, policy, tasks, args.randomized, out_dir)
 
