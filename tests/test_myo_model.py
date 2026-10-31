@@ -88,3 +88,43 @@ def test_muscles_track_a_squat():
     rms, effort, hc = _track("squat", 2.5)           # one full squat
     assert rms < 3.0 and effort.mean() > 0.02        # tracked, and the muscles did the work
     assert np.all(np.abs(np.degrees(hc.lean)) < 15)  # balance shift stays small
+
+
+def _myo_env():
+    import yaml
+    from exo_rl.envs.exo_env import ExoAssistEnv
+    cfg = yaml.safe_load(open("configs/default.yaml"))
+    cfg["human"]["model"] = "myo"
+    return ExoAssistEnv(cfg, seed=0), cfg
+
+
+def test_env_runs_on_myolegs_with_same_spaces():
+    env, cfg = _myo_env()
+    import yaml
+    from exo_rl.envs.exo_env import ExoAssistEnv
+    planar = ExoAssistEnv(yaml.safe_load(open("configs/default.yaml")), seed=0)
+    assert env.observation_space.shape == planar.observation_space.shape     # policies are interchangeable
+    obs, _ = env.reset(seed=0, options={"nominal": True, "task": "squat"})
+    for _ in range(30):
+        obs, r, term, trunc, info = env.step(np.zeros(4))
+    assert np.all(np.isfinite(obs)) and not term
+    assert 0 < info["reward_terms"]["effort"] < 1                         # mean muscle activation^2
+    assert info["tau_needed"].shape == (4,)
+
+
+def test_env_exo_torque_reaches_myolegs_joints():
+    env, _ = _myo_env()
+    env.reset(seed=0, options={"nominal": True, "task": "squat"})
+    env.step(np.array([1.0, 0.0, 0.0, 0.0]))                               # full hip_l flexion command
+    force = env.hm.data.actuator_force[env.exo_act]
+    assert force[0] > 1.0 and np.allclose(force[1:], 0.0)                  # hip_l motor pushes (rate-limited)
+
+
+def test_myo_env_rejects_partial_effort_joints():
+    import yaml
+    from exo_rl.envs.exo_env import ExoAssistEnv
+    cfg = yaml.safe_load(open("configs/default.yaml"))
+    cfg["human"]["model"] = "myo"
+    cfg["reward"]["effort_joints"] = ["hip", "knee"]
+    with pytest.raises(ValueError):
+        ExoAssistEnv(cfg, seed=0)

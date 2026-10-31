@@ -17,7 +17,7 @@ python -m pytest                # 54 tests, ~1.5 min — confirms everything wor
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
-- **Musculoskeletal human (in progress):** `pip install -r requirements-myo.txt` adds the MyoLeg model (80 muscles); `python -m exo_rl.sim.myo_model` loads it. `load_myolegs(SubjectParams(...))` adds a rigid upper body (subject mass minus the legs), the payload, and the CAD exo when `exo` is set (links on the pelvis, femurs, and tibias; motors on hip flexion and knee). `exo_rl/sim/muscle_human.py` drives the 80 muscles by static optimization (effort = mean activation²); a slow balance correction keeps the body's COM over the feet. Squats track to ~1.3°; with the warm-start teacher torque the exo cuts squat effort 30% vs. no exo (motors off: 32% more). Not yet used for training.
+- **Musculoskeletal human (experimental):** `pip install -r requirements-myo.txt`, then add `--set human.model=myo` to `pretrain_bc.py` / `train.py` to train on the MyoLeg model (80 muscles, exo CAD links and motors, rigid upper body + payload) instead of the planar torque-driven human. Effort becomes mean muscle activation² (static optimization, `exo_rl/sim/muscle_human.py`, settings under `human.muscle`). Observations and actions are unchanged, so policies transfer between models. About 5x slower per environment (~90 steps/s); the leg size is fixed (height only sets the trunk); high knees end early more often than on the planar model.
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 

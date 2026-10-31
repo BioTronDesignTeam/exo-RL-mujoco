@@ -38,6 +38,7 @@ tasks:
   blend_seconds: 0.5
 
 human:                       # Level-1 active human model (see exo_rl/sim/human.py)
+  model: torque              # torque: planar torque-driven human | myo: MyoLeg muscles (requirements-myo.txt)
   kp: {hip: 800, knee: 800, ankle: 600}
   kd: {hip: 60, knee: 50, ankle: 30}
   ki: {hip: 1200, knee: 1200, ankle: 800}
@@ -45,6 +46,22 @@ human:                       # Level-1 active human model (see exo_rl/sim/human.
   max_torque: {hip: 180, knee: 180, ankle: 150}   # Nm at 75 kg, scaled with mass
   exo_adaptation: 1.0                             # beta: 1 = human fully offloads exo torque
   residual: {x_kv: 500, pitch_kp: 2000, pitch_kd: 200}
+  muscle:                    # human.model: myo only (exo_rl/sim/muscle_human.py)
+    hold_kp: 400.0           # hip adduction/rotation, subtalar, MTP held at 0 (or the balance shift)
+    hold_kd: 40.0
+    held_weight: 0.3         # their weight in the activation solve, vs. 1 for the six tracked joints
+    activation_reg: 30.0     # cost of activation^2 vs. torque error^2 (Nm^2)
+    solver_iters: 60
+    activation_dynamics: true
+    ground_filter_s: 0.02    # low-pass on the ground force in the inverse dynamics
+    balance: true            # shift the posture so the COM sits over the feet
+    com_damping: true        # velocity helpers act on the COM instead of the pelvis
+    balance_tau_s: 1.0
+    support_tau_s: 0.2
+    balance_max_deg: [15.0, 10.0]   # forward, sideways
+    residual_roll_kp: 2000.0
+    residual_roll_kd: 200.0
+    residual_y_kv: 500.0
 
 exo:                         # shared with hardware (exo_rl/control/torque_pipeline.py)
   joints: [hip_l, knee_l, hip_r, knee_r]

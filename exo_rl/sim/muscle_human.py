@@ -80,8 +80,9 @@ class MuscleHumanController:
         self.ki0 = np.concatenate([per_joint(cfg["ki"]), np.zeros(n_held)]) * s
         self.i_limit = cfg.get("integral_limit_frac", 0.5) * np.concatenate(
             [per_joint(cfg["max_torque"]), np.zeros(n_held)]) * s
-        self.residual = {**cfg["residual"], **{k: c[k] for k in ("residual_roll_kp", "residual_roll_kd",
-                                                                 "residual_y_kv")}}
+        self.residual = dict(cfg["residual"])      # the env replaces this per motion, as for human.py
+        self.residual_extra = {k: c[k] for k in ("residual_roll_kp", "residual_roll_kd", "residual_y_kv")}
+        self.tau_max = per_joint(cfg["max_torque"]) * s  # reward normalization only; muscles set the real limits
         self.mass_scale = s
         self.reg, self.iters = c["activation_reg"], int(c["solver_iters"])
         self.act_dyn, self.ground_tc = bool(c["activation_dynamics"]), float(c["ground_filter_s"])
@@ -97,8 +98,10 @@ class MuscleHumanController:
         self.balance, self.bal_tau, self.sup_tau = bool(c["balance"]), c["balance_tau_s"], c["support_tau_s"]
         self.bal_max = np.radians(c["balance_max_deg"])
         self.com_damping = bool(c["com_damping"])
-        self.feet = np.array([i for i in range(model.ngeom)
-                              if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith(("foot", "bofoot"))])
+        gname = lambda i: mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) or ""  # noqa: E731
+        self.feet = np.array([i for i in range(model.ngeom) if gname(i).startswith(("foot", "bofoot"))])
+        self.foot_l = np.array([i for i in self.feet if gname(i).endswith("_l")])
+        self.foot_r = np.array([i for i in self.feet if gname(i).endswith("_r")])
         self.ankles = [model.joint(f"ankle_angle_{s}").id for s in "lr"]
 
         sign = {"ankle": 1.0, "hip": -1.0}
@@ -125,7 +128,7 @@ class MuscleHumanController:
         self.integral = np.zeros(len(self.dof))
         self.a = np.zeros(len(self.muscles))
         self.f_ground = None
-        self.support = None
+        self.support = None                  # filtered COM-to-support gap (forward, left), m
         self.lean = np.zeros(2)              # balance offsets: forward (ankle/hip), sideways (hip adduction), rad
 
     def coupling(self, d: mujoco.MjData) -> np.ndarray:
@@ -156,20 +159,23 @@ class MuscleHumanController:
     def update_balance(self, d: mujoco.MjData, dt: float):
         """Slowly shifts the posture so the whole-body COM sits over the middle of the foot contacts.
         Forward: ankle dorsiflexion with equal hip extension (shanks and thighs tilt, pelvis keeps its
-        pitch). Sideways: opposite hip adduction on the two legs (pelvis slides over the feet)."""
+        pitch). Sideways: opposite hip adduction on the two legs (pelvis slides over the feet).
+        Quasi-static balance: updated only while both feet are down, and held otherwise; in single
+        stance and gait the COM is not over the feet by design."""
         con = d.contact
-        on_floor = np.isin(con.geom1[:d.ncon], self.feet) | np.isin(con.geom2[:d.ncon], self.feet)
-        if on_floor.any():
-            sup = con.pos[:d.ncon][on_floor, :2].mean(axis=0)
-            self.support = sup if self.support is None else self.support + min(dt / self.sup_tau, 1.0) * (sup - self.support)
-        if self.support is None:
+        geoms = np.concatenate([con.geom1[:d.ncon], con.geom2[:d.ncon]])
+        if not (np.isin(self.foot_l, geoms).any() and np.isin(self.foot_r, geoms).any()):
             return
+        on_floor = np.isin(con.geom1[:d.ncon], self.feet) | np.isin(con.geom2[:d.ncon], self.feet)
         R = d.xmat[self.root_body].reshape(3, 3)
         heading = R[:2, 0] / max(np.linalg.norm(R[:2, 0]), 1e-9)
-        gap = self.support - d.subtree_com[self.root_body][:2]
+        gap = con.pos[:d.ncon][on_floor, :2].mean(axis=0) - d.subtree_com[self.root_body][:2]
         gap = np.array([gap @ heading, gap @ np.array([-heading[1], heading[0]])])   # forward, left
+        # Filter the COM-to-support gap (it moves with the body), not the support position, so walking
+        # doesn't leave the target behind.
+        self.support = gap if self.support is None else self.support + min(dt / self.sup_tau, 1.0) * (gap - self.support)
         height = max(d.subtree_com[self.root_body][2] - np.mean(d.xanchor[self.ankles, 2]), 0.3)
-        self.lean = np.clip(self.lean + (dt / self.bal_tau) * gap / height, -self.bal_max, self.bal_max)
+        self.lean = np.clip(self.lean + (dt / self.bal_tau) * self.support / height, -self.bal_max, self.bal_max)
 
     def compute(self, d: mujoco.MjData, q_ref, qd_ref, qdd_ref, trunk_ref, trunk_d_ref, v_ref: float,
                 tau_exo: np.ndarray, dt: float) -> tuple[np.ndarray, np.ndarray]:
@@ -198,7 +204,7 @@ class MuscleHumanController:
         else:
             self.f_ground = self.f_ground + min(dt / self.ground_tc, 1.0) * (raw - self.f_ground)
         tau_needed = C.T @ (m_qdd + d.qfrc_bias - self.f_ground) + self.kp * e + self.kd * ed + self.ki * self.integral
-        self.tau_needed = tau_needed[EXO_IN_TRACKED].copy()     # read-only export, exo order
+        self.tau_needed = tau_needed[:n].copy()                 # read-only export, HUMAN_JOINTS order
         tau_h = tau_needed.copy()
         tau_h[EXO_IN_TRACKED] -= self.beta * np.asarray(tau_exo)
 
@@ -214,7 +220,7 @@ class MuscleHumanController:
             d.act[self.act_adr] = self.a
         tau_muscle = A @ self.a + tau_passive
 
-        r, s = self.residual, self.mass_scale
+        r, s = {**self.residual_extra, **self.residual}, self.mass_scale
         v = d.qvel[self.root_v:self.root_v + 6].copy()
         if self.balance and self.com_damping:                  # damp the COM, not the pelvis
             mujoco.mj_subtreeVel(m, d)

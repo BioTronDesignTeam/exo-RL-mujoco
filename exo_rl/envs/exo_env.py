@@ -17,6 +17,12 @@ exo_mode (reset option or constructor arg) is for evaluation baselines:
 lean_info=True (training) returns only the small info fields training needs
 (reward_terms, task, terminated_reason, tau_needed), so vector-env workers pickle little.
 
+human.model (config) picks the simulated human: "torque" (default) is the planar torque-driven
+model (sim/model_builder.py + sim/human.py); "myo" is the MyoLeg musculoskeletal model
+(sim/myo_model.py + sim/muscle_human.py, needs requirements-myo.txt). With "myo", effort is the
+mean squared activation of the 80 muscles, the exo torque is applied by its motors, and tracking
+is measured against the balance-shifted reference the muscles follow.
+
 info["tau_needed"] (also self.tau_needed) is the torque the human needed at hip_l, knee_l,
 hip_r, knee_r before offloading any exo torque, averaged over the control step. It is
 privileged (sim-only) information for the warm-start teacher (exo_rl/warmstart.py).
@@ -62,6 +68,10 @@ class ExoAssistEnv(gym.Env):
         hw = cfg.get("exo_hardware") or {}
         self.exo_hw = ExoHardware(hw["spec"]) if hw.get("enabled") else None
         self.exo_quality = hw.get("quality", "lo")       # set to "hi" before reset() for viewing
+        self.myo = cfg["human"].get("model", "torque") == "myo"
+        if self.myo and set(cfg["reward"].get("effort_joints", ["hip", "knee", "ankle"])) != {"hip", "knee", "ankle"}:
+            raise ValueError("reward.effort_joints must be [hip, knee, ankle] with human.model: myo "
+                             "(muscle effort is whole-body)")
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, (self.obs_builder.dim,), np.float32)
         self.action_space = gym.spaces.Box(-1.0, 1.0, (4,), np.float32)
         self._build(randomization.nominal(cfg))
@@ -72,8 +82,15 @@ class ExoAssistEnv(gym.Env):
                            payload_offset=ep.payload_offset, floor_friction=ep.floor_friction,
                            joint_damping=ep.joint_damping, timestep=float(self.cfg["sim"]["timestep"]),
                            exo=self.exo_hw, exo_mass_scale=ep.exo_mass_scale, exo_quality=self.exo_quality)
-        self.hm = HumanExoModel(sp)
-        self.human = HumanController(self.cfg["human"], ep.mass)
+        if self.myo:
+            from ..sim.muscle_human import MuscleHumanController
+            from ..sim.myo_model import MyoHumanExoModel, exo_actuator_ids
+            self.hm = MyoHumanExoModel(sp)
+            self.human = MuscleHumanController(self.hm.model, self.cfg["human"], ep.mass)
+            self.exo_act = exo_actuator_ids(self.hm.model) if self.exo_hw is not None else None
+        else:
+            self.hm = HumanExoModel(sp)
+            self.human = HumanController(self.cfg["human"], ep.mass)
         self.human.set_randomization(ep.human_gain_scale, ep.exo_adaptation)
         if self.exo_hw is not None:     # feedforward compensates human leg + exo leg links
             self.limb = LimbParams(**self.exo_hw.limb_params(self.hm.segments, ep.exo_mass_scale))
@@ -183,13 +200,25 @@ class ExoAssistEnv(gym.Env):
         for k in range(self.frame_skip):
             ts = self.t + k * dt
             q, qd, qdd, trunk, trunk_d = self.ref.sample(ts)
-            tau_h, tau_res = self.human.compute(hm, q, qd, qdd, trunk, trunk_d, self._v_ref(ts),
-                                                self.human_felt_exo, dt)
-            d.qfrc_applied[:] = 0.0
-            d.qfrc_applied[hm.human_dof] += tau_h + tau_exo_h
-            d.qfrc_applied[hm.root_dof] += tau_res
-            mujoco.mj_step(m, d)
-            effort_sq += (tau_h / self.human.tau_max) ** 2
+            if self.myo:
+                d.qfrc_applied[:] = 0.0
+                act, tau_h = self.human.compute(d, q, qd, qdd, trunk, trunk_d, self._v_ref(ts),
+                                                self.human_felt_exo[EXO_IN_HUMAN], dt)
+                if self.exo_act is not None:
+                    d.ctrl[self.exo_act] = tau_applied
+                else:
+                    d.qfrc_applied[hm.exo_dof] += tau_applied
+                tau_res = self.human.root_residual[[0, 2, 4]]           # x, z, pitch, as the planar model's
+                mujoco.mj_step(m, d)
+                effort_sq += self.human.effort(act)
+            else:
+                tau_h, tau_res = self.human.compute(hm, q, qd, qdd, trunk, trunk_d, self._v_ref(ts),
+                                                    self.human_felt_exo, dt)
+                d.qfrc_applied[:] = 0.0
+                d.qfrc_applied[hm.human_dof] += tau_h + tau_exo_h
+                d.qfrc_applied[hm.root_dof] += tau_res
+                mujoco.mj_step(m, d)
+                effort_sq += (tau_h / self.human.tau_max) ** 2
             tau_h_sum += tau_h
             tau_needed_sum += self.human.tau_needed
             resid_sum += np.abs(tau_res)
@@ -199,6 +228,8 @@ class ExoAssistEnv(gym.Env):
         self.steps += 1
 
         q_ref, _, _, _, _ = self.ref.sample(self.t)
+        if self.myo:
+            q_ref = self.human.q_target
         q_err = d.qpos[hm.human_qpos] - q_ref
         reward, terms = self.reward_fn(effort_sq / self.frame_skip, q_err, tau_cmd, self.tau_cmd_prev)
         self.tau_cmd_prev = tau_cmd
