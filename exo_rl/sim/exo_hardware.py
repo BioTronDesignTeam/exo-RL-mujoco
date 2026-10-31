@@ -164,21 +164,23 @@ class ExoHardware:
             self._mesh_cache[quality] = out
         return self._mesh_cache[quality]
 
-    def body_offset(self, part: ExoPart, thigh_len_human: float) -> np.ndarray:
-        """Anchor position in the parent human body's frame."""
+    def body_offset(self, part: ExoPart, thigh_len_human: float, hip_half_width: float = HUMAN_HIP_Y) -> np.ndarray:
+        """Anchor position in the parent human body's frame (hip_half_width: the human's hip-center offset
+        from the midline; the exo pelvis is rigid, so the exo legs keep the CAD hip width)."""
         if part.group == "pelvis":
             return np.zeros(3)
+        lateral = part.anchor_lateral + (HUMAN_HIP_Y - hip_half_width) * (1 if part.side == "l" else -1)
         if part.group == "shank" and self.spec.get("knee_mode", "align_knee") == "rigid":
-            return np.array([0.0, part.anchor_lateral, thigh_len_human - self.thigh_length])
-        return np.array([0.0, part.anchor_lateral, 0.0])
+            return np.array([0.0, lateral, thigh_len_human - self.thigh_length])
+        return np.array([0.0, lateral, 0.0])
 
     def mjcf_snippets(self, thigh_len_human: float, mass_scale: float = 1.0, quality: str = "lo",
-                      rgba: str = ".45 .55 .75 1") -> tuple[str, dict[str, str]]:
+                      rgba: str = ".45 .55 .75 1", hip_half_width: float = HUMAN_HIP_Y) -> tuple[str, dict[str, str]]:
         """Returns (<asset> mesh lines, {human body name: xml of exo child bodies})."""
         assets = "\n".join(f'    <mesh name="{p.name}" file="{p.name}.stl" inertia="shell"/>' for p in self._parts)
         bodies: dict[str, str] = {}
         for p in self._parts:
-            o = self.body_offset(p, thigh_len_human)
+            o = self.body_offset(p, thigh_len_human, hip_half_width)
             I = p.inertia * mass_scale
             full = f"{I[0, 0]:.6g} {I[1, 1]:.6g} {I[2, 2]:.6g} {I[0, 1]:.6g} {I[0, 2]:.6g} {I[1, 2]:.6g}"
             bodies.setdefault(p.parent, "")

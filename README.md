@@ -17,7 +17,7 @@ python -m pytest                # 54 tests, ~1.5 min — confirms everything wor
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
-- **Musculoskeletal human (in progress):** `pip install -r requirements-myo.txt` adds the MyoLeg model (80 muscles); `python -m exo_rl.sim.myo_model` loads it. Not yet used for training.
+- **Musculoskeletal human (in progress):** `pip install -r requirements-myo.txt` adds the MyoLeg model (80 muscles); `python -m exo_rl.sim.myo_model` loads it. `load_myolegs(ExoHardware(...))` puts the CAD exo on it (links on the pelvis, femurs, and tibias; motors on hip flexion and knee). Not yet used for training.
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 
