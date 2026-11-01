@@ -90,6 +90,19 @@ def test_muscles_track_a_squat():
     assert np.all(np.abs(np.degrees(hc.lean)) < 15)  # balance shift stays small
 
 
+def test_balance_shift_decays_while_moving():
+    import yaml
+    from exo_rl.sim.muscle_human import MuscleHumanController
+    cfg = yaml.safe_load(open("configs/default.yaml"))["human"]
+    m = load_myolegs(SubjectParams(payload_mass=0.0))
+    d = mujoco.MjData(m)
+    hc = MuscleHumanController(m, cfg, 75.0)
+    hc.lean[:] = [0.1, 0.05]
+    for _ in range(500):                             # 1 s of walking reference (balance_tau_s = 1)
+        hc.update_balance(d, m.opt.timestep, v_ref=1.2)
+    assert np.all(np.abs(hc.lean) < 0.4 * np.array([0.1, 0.05]))   # in gait the shift would drift
+
+
 def _myo_env():
     import yaml
     from exo_rl.envs.exo_env import ExoAssistEnv

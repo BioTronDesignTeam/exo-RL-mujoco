@@ -56,6 +56,7 @@ human:                       # Level-1 active human model (see exo_rl/sim/human.
     activation_dynamics: true
     ground_filter_s: 0.02    # low-pass on the ground force in the inverse dynamics
     balance: true            # shift the posture so the COM sits over the feet
+    balance_when_moving: false   # false: the shift decays to 0 in walk/backward walk (it drifts in gait)
     com_damping: true        # velocity helpers act on the COM instead of the pelvis
     balance_tau_s: 1.0
     support_tau_s: 0.2

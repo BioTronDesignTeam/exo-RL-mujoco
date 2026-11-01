@@ -32,7 +32,9 @@ group_activation() gives the mean activation per muscle group (quads, glutes, ..
 Balance: the reference angles were made for the planar body; on MyoLeg they put the whole-body
 COM 4-6 cm behind the feet. update_balance() slowly (1 s) shifts the posture until the COM sits
 over the middle of the foot contacts: forward by ankle dorsiflexion with equal hip extension,
-sideways by opposite hip adduction. Tracking is against the shifted reference.
+sideways by opposite hip adduction. Tracking is against the shifted reference. While the reference
+moves (walk, backward walk) the shift decays to 0 instead (unless balance_when_moving): in gait the
+COM trails the front foot in every double support, so the correction would keep leaning forward.
 
 Root residuals (NOT human effort), as in human.py: a forward-velocity helper and a trunk
 orientation helper (pitch to the reference, roll and yaw to 0) standing in for the balance
@@ -65,7 +67,7 @@ MUSCLE_GROUPS = {
 }
 DEFAULTS = {"effort": "mean", "hold_kp": 400.0, "hold_kd": 40.0, "held_weight": 0.3, "activation_reg": 30.0, "solver_iters": 60,
             "activation_dynamics": True, "ground_filter_s": 0.02,
-            "balance": True, "com_damping": True, "balance_tau_s": 1.0, "support_tau_s": 0.2, "balance_max_deg": [15.0, 10.0],
+            "balance": True, "balance_when_moving": False, "com_damping": True, "balance_tau_s": 1.0, "support_tau_s": 0.2, "balance_max_deg": [15.0, 10.0],
             "residual_roll_kp": 2000.0, "residual_roll_kd": 200.0, "residual_y_kv": 500.0}
 
 
@@ -113,6 +115,7 @@ class MuscleHumanController:
         self.root_body = model.jnt_bodyid[root.id]
         self.balance, self.bal_tau, self.sup_tau = bool(c["balance"]), c["balance_tau_s"], c["support_tau_s"]
         self.bal_max = np.radians(c["balance_max_deg"])
+        self.bal_moving = bool(c["balance_when_moving"])
         self.com_damping = bool(c["com_damping"])
         gname = lambda i: mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i) or ""  # noqa: E731
         self.feet = np.array([i for i in range(model.ngeom) if gname(i).startswith(("foot", "bofoot"))])
@@ -184,12 +187,17 @@ class MuscleHumanController:
         R = self._moment[self.muscles] @ C                         # muscles x controlled joints
         return R.T * gain, R.T @ f0
 
-    def update_balance(self, d: mujoco.MjData, dt: float):
+    def update_balance(self, d: mujoco.MjData, dt: float, v_ref: float = 0.0):
         """Slowly shifts the posture so the whole-body COM sits over the middle of the foot contacts.
         Forward: ankle dorsiflexion with equal hip extension (shanks and thighs tilt, pelvis keeps its
         pitch). Sideways: opposite hip adduction on the two legs (pelvis slides over the feet).
         Quasi-static balance: updated only while both feet are down, and held otherwise; in single
-        stance and gait the COM is not over the feet by design."""
+        stance and gait the COM is not over the feet by design. While the reference moves forward or
+        backward the shift decays to 0 (see the module docstring)."""
+        if not self.bal_moving and abs(v_ref) > 1e-3:
+            self.lean -= min(dt / self.bal_tau, 1.0) * self.lean
+            self.support = None
+            return
         con = d.contact
         geoms = np.concatenate([con.geom1[:d.ncon], con.geom2[:d.ncon]])
         if not (np.isin(self.foot_l, geoms).any() and np.isin(self.foot_r, geoms).any()):
@@ -213,7 +221,7 @@ class MuscleHumanController:
         m = self.model
         n = len(TRACKED)
         if self.balance:
-            self.update_balance(d, dt)
+            self.update_balance(d, dt, v_ref)
         q_bal = np.asarray(q_ref) + self.lean[0] * self.sagittal
         q_des = np.concatenate([np.clip(q_bal, self.q_lo, self.q_hi), self.lean[1] * self.lateral])
         self.q_target = q_des[:n].copy()                         # what the six joints track (for logging)
