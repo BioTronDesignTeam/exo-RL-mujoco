@@ -33,8 +33,8 @@ def cluster(verts: np.ndarray, cell: float) -> tuple[np.ndarray, np.ndarray]:
     merged /= np.bincount(inverse)[:, None]
     faces = inverse.reshape(-1, 3)
     faces = faces[(faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])]
-    faces = np.unique(np.sort(faces, axis=1), axis=0, return_index=True)[1]
-    return merged, inverse.reshape(-1, 3)[np.sort(faces)]
+    keep = np.unique(np.sort(faces, axis=1), axis=0, return_index=True)[1]
+    return merged, faces[np.sort(keep)]
 
 
 def decimate(verts: np.ndarray, max_faces: int) -> tuple[np.ndarray, np.ndarray]:
