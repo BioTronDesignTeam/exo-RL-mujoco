@@ -1,7 +1,7 @@
 # exo-rl
 
 Train an exoskeleton controller with deep RL (TD3/DDPG) that **reduces the wearer's effort**.
-A simulated human performs the ACE tasks in MuJoCo while wearing the MK1 exo (from your CAD).
+A simulated human performs the ACE tasks in MuJoCo while wearing the MkI FA900 exo (from your CAD).
 The policy is rewarded for lowering the human's joint effort without disturbing their motion.
 The same control code then runs on the real hardware.
 
@@ -156,7 +156,7 @@ Writes `runs/NAME/export/`:
 
 | Flag | Default | Description |
 |---|---|---|
-| `--spec PATH` | `configs/exo_mk1.yaml` | Exo spec |
+| `--spec PATH` | `configs/exo_mk1_fa900.yaml` | Exo spec |
 | `--height M`, `--mass KG` | `1.75`, `75` | Pilot to fit it on |
 | `--render FILE` | — | Save an image of the pilot wearing the exo |
 
@@ -322,7 +322,7 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 | `warmstart.teacher_fraction=0.3` | Warm-start teacher strength (`pretrain_bc.py`) |
 | `agent.bc_weight=2.5` | Pull toward the initial policy when fine-tuning (`--init-from` only) |
 
-All settings are commented in `configs/default.yaml`. The exo itself is defined in `configs/exo_mk1.yaml`.
+All settings are commented in `configs/default.yaml`. The exo itself is defined in `configs/exo_mk1_fa900.yaml` (the previous MK1 FB900 in `configs/exo_mk1.yaml`, still used by older runs). A new SolidWorks URDF export is prepared with `python scripts/prepare_urdf.py <export folder> assets/<name>` (decimated meshes, MuJoCo-ready URDF), then described in a spec like `exo_mk1_fa900.yaml`.
 
 ---
 
@@ -332,8 +332,8 @@ Working on the code? Read [CONTRIBUTING.md](CONTRIBUTING.md) first: how a contro
 where to change what, conventions, and how to keep default training bit-identical.
 
 ```
-configs/          default.yaml (all settings), exo_mk1.yaml (your exo)
-assets/exo_mk1/   MuJoCo-ready URDF + meshes (hi = viewing, lo = training)
+configs/          default.yaml (all settings), exo_mk1_fa900.yaml (your exo), exo_mk1.yaml (previous exo)
+assets/exo_mk1_fa900/  MuJoCo-ready URDF + meshes (hi = viewing, lo = training); assets/exo_mk1/ previous exo
 exo_rl/sim/       human + exo model, reference motions, human controller
 exo_rl/control/   observation + torque pipeline — shared with hardware, keep identical
 exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
@@ -352,7 +352,7 @@ runs/demo/        example trained run
 
 1. **Connect your drivers.** Implement `HardwareInterface` in `deploy/run_hardware.py`: `connect`, `read_sensors`, `send_torque`, `disable`.
 2. **Convert signs.** Use `deploy/joint_map.py` (`MotorMap`) between motor and human conventions. The URDF signs are hip_l +1, knee_l −1, hip_r −1, knee_r +1.
-3. **Calibrate zeros.** Set encoder zero offsets in `configs/exo_mk1.yaml` (`motor_zero_offsets`).
+3. **Calibrate zeros.** Set encoder zero offsets in `configs/exo_mk1_fa900.yaml` (`motor_zero_offsets`).
 4. **Match your actuators.** Set `exo.max_torque`, `exo.rate_limit`, and `sim.control_dt`.
 5. **Test step by step.** Dry run with `--sim`, then run on hardware at reduced torque. Keep firmware torque limits and a hardware e-stop; the Python safety monitor is only a second layer.
 
@@ -391,7 +391,7 @@ Open tasks for contributors. Pick one, put your name next to it, and see
 
 ### Hardware
 - [ ] **Hardware interface.** Implement `HardwareInterface` in `deploy/run_hardware.py` (connect, read sensors, send torque, disable).
-- [ ] **Calibration.** Set encoder zero offsets in `configs/exo_mk1.yaml` and verify motor signs on the real exo.
+- [ ] **Calibration.** Set encoder zero offsets in `configs/exo_mk1_fa900.yaml` and verify motor signs on the real exo.
 - [ ] **First tests.** Run the exported policy at reduced torque with firmware limits and an e-stop.
 - [ ] **Docs.** `exo_rl/control/observation.py` refers to `deploy/hardware_interface.py`, which doesn't exist (the interface is in `deploy/run_hardware.py`).
 

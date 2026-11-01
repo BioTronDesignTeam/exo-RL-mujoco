@@ -39,7 +39,7 @@ def test_upper_body_brings_subject_to_full_mass():
 def test_exo_attaches_to_myolegs():
     from exo_rl.sim.exo_hardware import ExoHardware
     from exo_rl.sim.myo_model import exo_actuator_ids
-    exo = ExoHardware("configs/exo_mk1.yaml")
+    exo = ExoHardware("configs/exo_mk1_fa900.yaml")
     p = SubjectParams(mass=80.0, payload_mass=11.34, exo=exo)
     worn = load_myolegs(p)
     assert np.isclose(worn.body_mass.sum(), 80.0 + 11.34 + exo.total_mass, atol=1e-3)

@@ -1,0 +1,48 @@
+# MkI FA900 exoskeleton (SolidWorks URDF export, prepared with scripts/prepare_urdf.py), mounted
+# on the human model. Paths are relative to the repo root. 13.3 kg total.
+urdf: assets/exo_mk1_fa900/MkI_FA900_Full_Body_Assembly.urdf
+meshes: {hi: assets/exo_mk1_fa900/meshes_hi, lo: assets/exo_mk1_fa900/meshes_lo}
+
+# CAD frame -> human frame. From the geometry: the waist band (base_link) curves behind the hip
+# motors, legs point down. Human frame: x forward, y pilot's left, z up.
+cad_forward: -y
+cad_up: +z
+
+# Per leg the CAD chain is hip_clevis (passive, vertical axis: hip rotation) -> hip_joint (passive,
+# abduction) -> thigh (hip flexion motor) -> shank (knee motor). The CAD names match the pilot's
+# sides; the loader verifies this against the geometry.
+legs:
+  l:
+    hip_joint: thigh_left
+    knee_joint: shank_left
+    thigh_links: [thigh_link_left]
+    shank_links: [shank_link_left]
+  r:
+    hip_joint: thigh_right
+    knee_joint: shank_right
+    thigh_links: [thigh_link_right]
+    shank_links: [shank_link_right]
+
+# Everything that moves with the pelvis (the passive rotation/abduction joints are locked in the
+# worn pose below).
+pelvis_links: [base_link, hip_clevis_link_left, hip_joint_link_left, hip_clevis_link_right, hip_joint_link_right]
+
+# Worn pose. At the CAD zero pose the legs are turned 23.25 deg and abducted 8.5 deg, with the
+# thighs 6.9 deg back. These angles put the hip flexion axes sideways (0.07 deg) and the thighs
+# vertical; the knee stays at 0 (straight).
+cad_pose_deg: {hip_clevis_left: 23.25, hip_joint_left: 8.5, thigh_left: -6.92,
+               hip_clevis_right: -23.25, hip_joint_right: 8.5, thigh_right: 6.92}
+
+# Knee alignment. The CAD hip->knee axis distance (0.47 m) is longer than most pilots' thighs.
+#   align_knee: exo knee axis placed on the human knee (models a length-adjusted exo)
+#   rigid:      exo kept rigid as in CAD (knee axes misaligned; visual reference only)
+knee_mode: align_knee
+
+# Motor calibration for the real hardware (encoder reading at the human-zero pose, rad). If the
+# encoders read 0 at the CAD zero pose, the hip offsets are the cad_pose thigh angles (-/+6.92 deg);
+# measure on the real exo. Signs are derived from the URDF joint axes; see scripts/exo_info.py.
+motor_zero_offsets: {hip_l: 0.0, knee_l: 0.0, hip_r: 0.0, knee_r: 0.0}
+
+# From the URDF <limit effort>: 100 Nm, an exporter placeholder.
+# The torque limits actually used are exo.max_torque in the training config.
+urdf_effort_nm: 100

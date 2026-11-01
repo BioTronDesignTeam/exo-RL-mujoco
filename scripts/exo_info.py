@@ -1,6 +1,6 @@
 """Summarize a CAD exo spec: masses, fit on a pilot, motor sign mapping, optional render.
 
-    python scripts/exo_info.py                               # configs/exo_mk1.yaml, nominal pilot
+    python scripts/exo_info.py                               # configs/exo_mk1_fa900.yaml, nominal pilot
     python scripts/exo_info.py --height 1.82 --mass 80
     MUJOCO_GL=egl python scripts/exo_info.py --render exo_fit.png   # headless render
 """
@@ -20,7 +20,7 @@ from exo_rl.sim.model_builder import HumanExoModel, SubjectParams  # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--spec", default="configs/exo_mk1.yaml")
+    ap.add_argument("--spec", default="configs/exo_mk1_fa900.yaml")
     ap.add_argument("--height", type=float, default=1.75)
     ap.add_argument("--mass", type=float, default=75.0)
     ap.add_argument("--render", help="save a front/side/3-4 image of the pilot wearing the exo")

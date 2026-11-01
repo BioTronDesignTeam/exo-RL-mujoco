@@ -8,7 +8,7 @@ Your motors use their own direction and encoder zero. MotorMap converts between 
     tau_motor = sign * tau_human
 
 Signs are derived from the URDF joint axes (exo_rl/sim/exo_hardware.py) and exported in
-deploy_config.json["motor_map"]. Zero offsets come from configs/exo_mk1.yaml
+deploy_config.json["motor_map"]. Zero offsets come from configs/exo_mk1_fa900.yaml
 (motor_zero_offsets): stand the pilot straight, read the encoders, and write them there.
 
 Before powering on, verify each joint by hand: flex the pilot's left hip with the exo

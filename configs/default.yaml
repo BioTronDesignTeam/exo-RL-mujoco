@@ -19,7 +19,7 @@ payload:                     # ACE soft exo: 25 lb dead weight secured to the su
 
 exo_hardware:                # CAD exoskeleton mounted on the human (exo_rl/sim/exo_hardware.py)
   enabled: true
-  spec: configs/exo_mk1.yaml
+  spec: configs/exo_mk1_fa900.yaml
   quality: lo                # lo = light meshes for training; view.py switches to hi
   mass_scale: 1.0            # scales all exo link masses/inertias ("what if the exo were lighter?")
 

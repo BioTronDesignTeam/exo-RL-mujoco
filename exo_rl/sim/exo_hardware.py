@@ -7,7 +7,8 @@ is placed on the human hip joint and (with knee_mode: align_knee) the exo knee a
 human knee. Exo torque is still applied at the human hip/knee joints, i.e. the coupling is
 rigid (see README, "Known limitations").
 
-Frames: the URDF is loaded in MuJoCo at its zero pose (legs straight). Every point is
+Frames: the URDF is loaded in MuJoCo at its zero pose, or at the spec's cad_pose_deg (joint
+angles that put the CAD in the worn pose: legs straight, hip flexion axes sideways). Every point is
 re-expressed in the human frame (x forward, y pilot's left, z up) relative to an anchor:
     pelvis parts: midpoint of the two exo hip-flexion axes  -> pelvis origin (hip height)
     thigh parts:  that side's exo hip-flexion axis          -> human hip
@@ -84,8 +85,10 @@ class ExoHardware:
         urdf = os.path.join(REPO_ROOT, self.spec["urdf"])
         self.model = mujoco.MjModel.from_xml_path(urdf)
         self.data = mujoco.MjData(self.model)
-        mujoco.mj_forward(self.model, self.data)
         m, d = self.model, self.data
+        for joint, deg in (self.spec.get("cad_pose_deg") or {}).items():   # pose the CAD as worn
+            d.qpos[m.jnt_qposadr[m.joint(joint).id]] = np.radians(deg)
+        mujoco.mj_forward(m, d)
 
         fwd, up = _axis(self.spec["cad_forward"]), _axis(self.spec["cad_up"])
         self.R = np.stack([fwd, np.cross(up, fwd), up])           # human = R @ cad

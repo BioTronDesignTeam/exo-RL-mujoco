@@ -7,3 +7,6 @@ runs/demo/resume/
 runs/demo/checkpoints/step_*.pt
 runs/demo/checkpoints/latest.pt
 venv
+
+# raw SolidWorks URDF exports (prepared copies live in assets/, see scripts/prepare_urdf.py)
+/MkI_FA900_Full_Body_Assembly/
