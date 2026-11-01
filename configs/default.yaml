@@ -15,7 +15,7 @@ subject:                     # nominal pilot (randomized below)
 payload:                     # ACE soft exo: 25 lb dead weight secured to the suit
   enabled: true
   mass: 11.34
-  offset: [-0.12, 0.0, 0.20] # m from pelvis origin (lower back). Match your real mount.
+  offset: [-0.12, 0.0, 0.40] # m from pelvis origin: on top of the FA900 waist band (band top 0.29). Match your real mount.
 
 exo_hardware:                # CAD exoskeleton mounted on the human (exo_rl/sim/exo_hardware.py)
   enabled: true

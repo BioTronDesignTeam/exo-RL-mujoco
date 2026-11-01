@@ -50,7 +50,7 @@ class SubjectParams:
     height: float = 1.75            # m
     mass: float = 75.0              # kg (pilot only, without payload)
     payload_mass: float = 11.34     # kg (25 lb). 0 disables the payload.
-    payload_offset: tuple = (-0.12, 0.0, 0.20)  # m, relative to pelvis origin (lower back)
+    payload_offset: tuple = (-0.12, 0.0, 0.40)  # m, relative to pelvis origin (on the exo waist band)
     floor_friction: float = 1.0     # applied to floor AND feet (MuJoCo uses the max of the pair)
     joint_damping: float = 0.5      # Nm·s/rad, passive joint damping
     timestep: float = 0.002
