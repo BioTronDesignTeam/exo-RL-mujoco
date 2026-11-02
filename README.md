@@ -241,6 +241,19 @@ scp -r user@VM_IP:exo-RL-mujoco/runs/ws_s* runs/      # later, from your laptop
 It creates the Python environment on first use, then for each seed runs the warm start, RL
 fine-tuning for `--minutes`, and `evaluate.py` (nominal + 5 random pilots). Stop the VM when done.
 
+The settings used for the reported runs are kept in `configs/remote/` (`planar.set`, `myo.set`:
+`agent.bc_weight_min=0.5`, `train.total_steps=500000`, plus `human.model=myo`), so a rerun
+doesn't depend on remembering `--set` flags:
+
+```bash
+bash scripts/remote_train.sh --name myo --set-file configs/remote/myo.set --detach
+```
+
+To run several jobs on one machine at once, pass `--threads N` (`train.torch_threads`). The
+auto value assumes the run has the machine to itself: three runs with 8 envs each on 32 cores
+got ~16 torch threads apiece, starved their env workers and ran at ~5 steps/s instead of ~200.
+Keep `runs × (threads + envs)` near the core count, e.g. `--threads 4` for three 8-env runs.
+
 ### Options
 
 **Parallel simulation.** `train.num_envs=N` runs N envs in worker processes and overlaps

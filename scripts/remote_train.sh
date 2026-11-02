@@ -3,11 +3,14 @@
 #
 #   bash scripts/remote_train.sh --name ws --minutes 120 --seeds "0 1 2" --detach
 #   bash scripts/remote_train.sh --name fix --set agent.bc_weight_min=0.5   # config overrides (warm start + RL)
-#   bash scripts/remote_train.sh --name myo --set human.model=myo           # MyoLeg muscles (installs myo-sim)
+#   bash scripts/remote_train.sh --name myo --set-file configs/remote/myo.set   # MyoLeg muscles (installs myo-sim)
+#   bash scripts/remote_train.sh --name a --threads 4 --detach              # several runs at once on one machine
 #
 # For each seed: warm start (pretrain_bc.py), RL fine-tuning (train.py) for --minutes, then
 # evaluate.py on the nominal pilot and 5 random pilots. Results: runs/<name>_s<seed>/, logs in
 # runs/<name>.log. With --detach it runs in the background and survives logging out.
+# --set-file reads KEY=VALUE lines (# comments allowed); later --set flags override them.
+# --threads caps torch threads per run; the auto value assumes the run has the machine to itself.
 # Copy results to your laptop afterwards:  scp -r user@VM_IP:exo-RL-mujoco/runs/<name>_s* runs/
 set -euo pipefail
 
@@ -19,7 +22,14 @@ ENVS=""                      # default: half the CPU cores, 2..8
 DETACH=0
 EXTRA=()                     # --set KEY=VALUE overrides passed on to train.py
 
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+read_set_file() {
+    [ -f "$1" ] || { echo "no such file: $1"; exit 1; }
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"; line="${line//[[:space:]]/}"
+        [ -n "$line" ] && EXTRA+=(--set "$line")
+    done < "$1"
+}
 while [ $# -gt 0 ]; do
     case "$1" in
         --name) NAME="$2"; shift 2 ;;
@@ -29,6 +39,8 @@ while [ $# -gt 0 ]; do
         --envs) ENVS="$2"; shift 2 ;;
         --detach) DETACH=1; shift ;;
         --set) EXTRA+=(--set "$2"); shift 2 ;;
+        --set-file) read_set_file "$2"; shift 2 ;;
+        --threads) EXTRA+=(--set "train.torch_threads=$2"); shift 2 ;;
         -h|--help) usage 0 ;;
         *) echo "unknown option: $1"; usage 1 ;;
     esac

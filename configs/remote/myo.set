@@ -1,0 +1,4 @@
+# Settings for remote_train.sh --set-file (one KEY=VALUE per line), as used for the myo_fa900_* runs.
+human.model=myo
+agent.bc_weight_min=0.5      # without it the policy drops once the BC pull reaches 0
+train.total_steps=500000
