@@ -38,6 +38,7 @@ python scripts/view.py --task squat                        # watch pilot + exo (
 python scripts/train.py --name mk1 --max-minutes 60        # train (stops and saves after 60 min)
 python scripts/train.py --name mk1 --resume                # continue training
 python scripts/evaluate.py --run runs/mk1                  # effort table + plots
+python scripts/plot_training.py --run runs/mk1             # training curves
 python scripts/view.py --run runs/mk1 --task circuit       # watch the trained policy
 python scripts/export_policy.py --run runs/mk1 --height 1.78 --mass 72
 python -m deploy.run_hardware --export runs/mk1/export --sim   # deployment dry run
@@ -124,6 +125,23 @@ python scripts/watch_training.py --run runs/mk1 --record-dir runs/mk1/videos    
 
 It prints the checkpoint step on each reload and the mean effort per episode, and shows step and
 task as a text overlay in the viewer. It waits if the run or checkpoint doesn't exist yet.
+
+### `scripts/plot_training.py`: plot training progress
+
+```bash
+python scripts/plot_training.py --run runs/mk1                          # -> runs/mk1/training.png
+python scripts/plot_training.py --run runs/mk1 runs/ws --out cmp.png    # compare runs
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run PATH [PATH ...]` | required | Run folder(s); several = compare mode |
+| `--smooth N` | `20` | Moving-average window in episodes (`1` = off) |
+| `--out FILE` | `<run>/training.png` (several runs: `runs/compare_training.png`) | Output PNG |
+
+One run: smoothed total reward per episode, smoothed human effort, and eval effort reduction per task,
+with the `best.pt` step marked. Several runs: one color per run, and the eval graph shows each run's
+checkpoint score (★ = `best.pt`). Works while training is still running.
 
 ### `scripts/evaluate.py`: measure a trained policy
 
@@ -352,7 +370,7 @@ exo_rl/control/   observation + torque pipeline — shared with hardware, keep i
 exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
 exo_rl/agents/    TD3 / DDPG learning algorithm
 exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing helpers
-scripts/          train, pretrain_bc, view, watch_training, evaluate, export, exo_info
+scripts/          train, pretrain_bc, view, plot_training, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
 tests/            54 tests (run by CI on every PR)
