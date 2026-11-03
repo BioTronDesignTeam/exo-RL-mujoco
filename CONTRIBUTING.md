@@ -39,6 +39,7 @@ is simulation or training.
 | `exo_rl/evaluation.py` | Effort vs exo off / no exo; `PeriodicEval` for training-time evaluation |
 | `exo_rl/warmstart.py` | Teacher, BC data `Collector`, BC training (`scripts/pretrain_bc.py`) |
 | `exo_rl/viewing.py` | Viewer/recording helpers for `view.py` and `watch_training.py` |
+| `exo_rl/plotting.py` | Training-progress plots from `episodes.csv` / `eval.csv` (`scripts/plot_training.py`) |
 | `scripts/` | Command-line entry points only; logic lives in `exo_rl/` |
 | `deploy/` | Hardware loop, motor map, safety monitor |
 
