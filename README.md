@@ -24,6 +24,28 @@ python -m pytest                # 47 tests, ~1.5 min — confirms everything wor
 
 ## Quick start
 
+### Optional MyoLeg26 muscle model
+
+Clone the external MyoSim source at the revision used by this adapter, then install
+the project dependencies:
+
+```bash
+git clone https://github.com/MyoHub/myo_sim myo_sim
+pip install -r requirements.txt
+```
+
+Skip the clone command if `myo_sim/` already exists. Set `human.myo.source_dir` if
+the clone is elsewhere.
+
+Active Myo motion configs are in `configs/myo/`: `squat.yaml`, `walk.yaml`,
+`backward_walk.yaml`, `high_knees.yaml`, and `quick_steps.yaml`. Preview with:
+
+```bash
+python scripts/view.py --config configs/myo/high_knees.yaml --task high_knees --mode off --seed 25001
+```
+
+### Original torque model
+
 ```bash
 python scripts/view.py --task squat                        # watch pilot + exo (unpowered)
 python scripts/train.py --name mk1 --max-minutes 60        # train (stops and saves after 60 min)

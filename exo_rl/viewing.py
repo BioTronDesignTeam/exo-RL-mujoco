@@ -12,7 +12,7 @@ import mujoco
 import numpy as np
 
 from .envs.exo_env import ExoAssistEnv
-from .sim.reference import ReferenceTrajectory
+from .sim.reference import TRAVELING_MOTIONS, ReferenceTrajectory
 from .utils import load_config
 
 
@@ -43,8 +43,11 @@ def make_view_env(cfg: dict, task: str, mode: str, seed: int = 0, randomize: boo
 
 def reset_view_env(env: ExoAssistEnv, task: str, mode: str, seed: int = 0, randomize: bool = False):
     circuit = task == "circuit"
+    tcfg = env.cfg["tasks"]
+    circuit_names = [n for n in tcfg.get("ace_order", tcfg["names"]) if n in env.motions]
+    flat_ground = circuit and bool(TRAVELING_MOTIONS.intersection(circuit_names))
     obs, _ = env.reset(seed=seed, options={"task": None if circuit else task, "exo_mode": mode,
-                                           "nominal": not randomize})
+                                           "nominal": not randomize, "flat_ground": flat_ground})
     if circuit:                  # long, repeating ACE course so it never ends mid-view
         tcfg = env.cfg["tasks"]
         names = [n for n in tcfg.get("ace_order", tcfg["names"]) if n in env.motions]
@@ -61,7 +64,8 @@ def setup_camera(cam, env: ExoAssistEnv, mode: str = "track"):
     if mode == "fixed":          # static side view: the pilot visibly travels across the frame
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         x0 = float(env.hm.data.qpos[env.hm.root_qpos[0]])
-        cam.lookat[:] = [x0 + 2.0, 0.0, 0.8]
+        direction = -1. if sum(env.speeds.values()) < 0. else 1.
+        cam.lookat[:] = [x0 + direction * 2.0, 0.0, 0.8]
         cam.distance, cam.azimuth, cam.elevation = 6.0, 90.0, -8.0
         return
     cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -116,6 +120,11 @@ class Stats:
             self.last_print = env.t
             print(f"t={env.t:6.1f}s  {info['task']:14s} phase {info['phase']:.2f}  effort {self.effort[-1]:.3f} "
                   f"(mean {np.mean(self.effort):.3f})  exo tau [hipL kneeL hipR kneeR] = {np.round(info['tau_exo_cmd'], 1)}")
+            if "posture" in info:
+                angles = {name: round(float(np.degrees(value)), 1) for name, value in info["posture"].items()}
+                print(f"  posture (deg): {angles}")
+                print(f"  world x={env.hm.data.qpos[env.hm.root_qpos[0]]:.2f} m  "
+                      f"forward velocity={env.hm.data.qvel[env.hm.root_dof[0]]:.2f} m/s")
 
 
 def exit_after_viewer(code: int = 0):
@@ -136,6 +145,7 @@ class LiveView:
         import mujoco.viewer
         self.model = env.hm.model
         self.data = mujoco.MjData(self.model)
+        mujoco.mj_copyData(self.data, self.model, env.hm.data)
         self.camera, self.dt = camera, env.control_dt / speed
         self.handle = mujoco.viewer.launch_passive(self.model, self.data)
         self.has_text = hasattr(self.handle, "set_texts")
@@ -153,7 +163,7 @@ class LiveView:
     def show(self, env, text: tuple[str, str] | None = None):
         """Mirror env state, draw, and sleep to keep real-time pace. text = (labels, values)."""
         src = env.hm.data
-        self.data.qpos[:], self.data.qvel[:], self.data.time = src.qpos, src.qvel, src.time
+        mujoco.mj_copyData(self.data, self.model, src)
         mujoco.mj_forward(self.model, self.data)
         if text is not None and text != self.text and self.has_text:   # set_texts is slow: only on change
             self.text = text

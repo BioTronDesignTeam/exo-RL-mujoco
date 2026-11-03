@@ -62,5 +62,5 @@ class DeployController:
         obs = self.obs_builder(sensors, self.prev_action)
         action = self._infer(obs)
         tau = self.pipeline(action, np.asarray(sensors["q_exo"], dtype=float), float(sensors["trunk_pitch"]))
-        self.prev_action = action
+        self.prev_action = self.pipeline.observation_action(action)
         return tau

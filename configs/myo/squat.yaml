@@ -1,0 +1,239 @@
+# Independent pelvis/lumbar posture; ideal bounded lumbar helper, not upper-body muscles.
+seed: 0
+sim:
+  timestep: 0.001
+  control_dt: 0.01
+  episode_seconds: 20.0
+  floor_friction: 1.0
+  joint_damping: 0.5
+  diagnostics: true
+  flat_ground: true
+subject:
+  height: 1.75
+  mass: 78.09046847904192
+payload:
+  enabled: true
+  mass: 25.0
+  offset:
+  - -0.18
+  - 0.0
+  - 0.22
+exo_hardware:
+  enabled: true
+  spec: configs/exo_mk1.yaml
+  quality: lo
+tasks:
+  names:
+  - squat
+  data_dir: data/motions/myolegs26_torso_v2
+  extra_motions: []
+  circuit_prob: 0.0
+  circuit_segment_seconds:
+  - 2.0
+  - 3.5
+  circuit_order: random
+  ace_order:
+  - squat
+  forbidden_transitions:
+  - - backward_walk
+    - walk
+  blend_seconds: 0.5
+  periods: {}
+  startup_seconds: 2.0
+human:
+  kp:
+    hip: 1500
+    knee: 1500
+    ankle: 1500
+  kd:
+    hip: 100
+    knee: 100
+    ankle: 100
+  ki:
+    hip: 1500
+    knee: 1500
+    ankle: 1500
+  integral_limit_frac: 0.5
+  max_torque:
+    hip: 180
+    knee: 180
+    ankle: 150
+  exo_adaptation: 1.0
+  residual:
+    x_kv: 500
+    pitch_kp: 4000
+    pitch_kd: 400
+    pitch_ki: 1000
+    pitch_integral_limit: 200
+  model: myolegs26
+  myo:
+    source_dir: myo_sim
+    initialize_reference_velocity: true
+    ankle_dorsiflexion_deg: 45.0
+    scale: 1.157625
+    activation_regularization: 0.002
+    foot_control:
+      enabled: false
+      toe_kp: 15.0
+      toe_kd: 2.0
+      toe_torque_limit: 15.0
+      pitch_kp: 40.0
+      pitch_kd: 4.0
+      pitch_torque_limit: 20.0
+      smoothing_seconds: 0.08
+      torque_rate_limit: 100.0
+      pitch_deadband_deg: 1.0
+    standing_control:
+      enabled: true
+      transition_deg: 15.0
+      stiffness_scale: 0.4
+      integral_release_seconds: 0.5
+    reset:
+      start_phase: 0.0
+      settle_seconds: 2.0
+      height_jitter_m: 0.001
+    torso_control:
+      enabled: true
+      pelvis_pitch_deg: 0.0
+      pelvis_share: 0.25
+      kp: 600.0
+      kd: 60.0
+      max_torque_Nm: 160.0
+exo:
+  joints:
+  - hip_l
+  - knee_l
+  - hip_r
+  - knee_r
+  max_torque:
+  - 10
+  - 10
+  - 10
+  - 10
+  action_scale:
+  - 10
+  - 10
+  - 10
+  - 10
+  rate_limit: 1500
+  direction:
+  - both
+  - both
+  - both
+  - both
+  feedforward: limb_gravity
+  alpha: 0.0
+  smoothing_seconds: 0.15
+observation:
+  history: 8
+  use_phase: true
+  include_prev_action: true
+reward:
+  alive: 2.0
+  w_effort: 2.0
+  w_tracking: 0.3
+  tracking_sigma_deg: 10
+  w_smooth: 0.5
+  w_magnitude: 0.05
+  exo_torque_reference:
+  - 40
+  - 40
+  - 40
+  - 40
+termination:
+  max_joint_error_deg: 45
+  min_pelvis_height_frac: 0.5
+randomization:
+  enabled: false
+  height:
+  - 1.6
+  - 1.9
+  mass:
+  - 55.0
+  - 95.0
+  payload_mass_scale:
+  - 0.95
+  - 1.05
+  payload_offset_m: 0.03
+  floor_friction:
+  - 0.7
+  - 1.2
+  joint_damping_scale:
+  - 0.7
+  - 1.3
+  human_gain_scale:
+  - 0.8
+  - 1.2
+  exo_adaptation:
+  - 0.6
+  - 1.0
+  latency_steps:
+  - 0
+  - 2
+  torque_noise_frac: 0.05
+  exo_mass_scale:
+  - 0.95
+  - 1.05
+  sensor_noise:
+    angle: 0.005
+    velocity: 0.05
+    gyro: 0.05
+    accel: 0.2
+agent:
+  algo: td3
+  hidden:
+  - 256
+  - 256
+  actor_lr: 0.0003
+  critic_lr: 0.0003
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256
+  buffer_size: 100000
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_delay: 2
+  expl_noise: 0.03
+  actor_freeze_steps: 1000
+  bc_weight: 2.5
+  bc_decay_steps: 0
+  actor_logit_l2: 0.0
+train:
+  total_steps: 15000
+  start_steps: 1000
+  eval_every: 5000
+  eval_episodes: 8
+  latest_every: 1000
+  eval_async: false
+  best_metric: mean
+  save_every: 5000
+  device: auto
+  sim_backend: cpu
+  warp_device: cuda:0
+  warp_nconmax: 128
+  warp_njmax: 512
+  num_envs: 1
+  updates_per_step: 0.25
+  torch_threads: 2
+  eval_paired: true
+  eval_device: cpu
+  eval_seeds:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 1000
+  - 1001
+  - 2000
+warmstart:
+  teacher_fraction: 0.2
+  label_offset_steps: 1
+  rounds: 2
+  collect_noise: 0.01
+  epochs: 20
+  batch_size: 256
+  lr: 0.0003
+  num_envs: 1
+  eval_episodes: 3
+  save_buffer: true

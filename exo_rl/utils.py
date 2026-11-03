@@ -1,15 +1,28 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import time
+from pathlib import Path
 
 import yaml
 
 
+def resolve_config_path(path: str | Path) -> Path:
+    """Resolve archived config names used by historical commands and run protocols."""
+    target = Path(path)
+    root = Path(__file__).resolve().parents[1] / "configs"
+    manifest = root / "archive" / "manifest.json"
+    if target.is_file() or target.resolve().parent != root or not manifest.is_file():
+        return target
+    archived = json.loads(manifest.read_text(encoding="utf-8-sig"))["legacy_paths"].get(target.name)
+    return root / archived if archived is not None else target
+
+
 def load_config(path: str, overrides: list[str] | None = None) -> dict:
     """Load a YAML config and apply overrides like ["agent.algo=ddpg", "train.total_steps=5000"]."""
-    with open(path) as f:
+    with open(resolve_config_path(path)) as f:
         cfg = yaml.safe_load(f)
     for ov in overrides or []:
         key, _, value = ov.partition("=")

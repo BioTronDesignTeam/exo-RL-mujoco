@@ -26,7 +26,7 @@ class WarpRunner:
             import warp as wp
             import mujoco_warp as mjw
         except ImportError as exc:
-            raise ValueError("warp backend requires requirements-gpu.txt and an NVIDIA CUDA GPU") from exc
+            raise ValueError("warp backend requires the optional mujoco-warp and warp-lang entries in requirements.txt and an NVIDIA CUDA GPU") from exc
         wp.init()
         self.device = cfg["train"].get("warp_device", "cuda:0")
         try:
@@ -72,8 +72,16 @@ class WarpRunner:
         self.data.time.assign(np.array([env.hm.data.time for env in self.envs], np.float32))
         self.mjw.step(self.model, self.data)
         # Read every substep: host controllers require the updated state.
-        overflow = self.data.overflow.numpy()
-        if np.any(overflow):
+        if hasattr(self.data, "overflow"):
+            overflow = np.any(self.data.overflow.numpy())
+        else:
+            # Older MJWarp versions expose counts rather than overflow flags.
+            # Contacts share a global buffer; constraints are limited per world.
+            overflow = (
+                np.any(self.data.nacon.numpy() > self.data.naconmax)
+                or np.any(self.data.nefc.numpy() > self.data.njmax)
+            )
+        if overflow:
             raise RuntimeError("MuJoCo Warp buffer overflow; increase train.warp_nconmax/warp_njmax")
         values = {name: getattr(self.data, name).numpy() for name in
                   ("qpos", "qvel", "qacc_warmstart", "sensordata", "time")}

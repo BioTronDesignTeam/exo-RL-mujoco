@@ -7,3 +7,4 @@ runs/demo/resume/
 runs/demo/checkpoints/step_*.pt
 runs/demo/checkpoints/latest.pt
 venv
+/myo_sim/

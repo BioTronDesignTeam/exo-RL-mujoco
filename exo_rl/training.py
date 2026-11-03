@@ -68,24 +68,26 @@ class WarmStartSchedule:
     Counted in env steps after learning starts (after start_steps):
       [0, freeze_steps)                      only the critic learns
       then for bc_decay_steps                actor loss = -Q/mean|Q| + w * ||pi - pi_init||^2,
-                                             w decays linearly from bc_weight to 0
+                                             w decays linearly from bc_weight to bc_weight_min
     """
     freeze_steps: int = 0
     bc_weight: float = 0.0
     bc_decay_steps: int = 0
+    bc_weight_min: float = 0.0
 
     @classmethod
     def from_config(cls, agent_cfg: dict, active: bool) -> "WarmStartSchedule":
         if not active:
             return cls()
         return cls(int(agent_cfg.get("actor_freeze_steps", 0)), float(agent_cfg.get("bc_weight", 0.0)),
-                   int(agent_cfg.get("bc_decay_steps", 0)))
+                   int(agent_cfg.get("bc_decay_steps", 0)), float(agent_cfg.get("bc_weight_min", 0.0)))
 
     def at(self, learning_steps: int) -> tuple[bool, float]:
         """(actor_frozen, bc_weight) after this many env steps of learning."""
         u = learning_steps - self.freeze_steps          # steps since the actor was unfrozen
         if self.bc_decay_steps > 0:
-            w = self.bc_weight * min(1.0, max(0.0, 1.0 - u / self.bc_decay_steps))
+            frac = min(1.0, max(0.0, 1.0 - u / self.bc_decay_steps))
+            w = self.bc_weight_min + (self.bc_weight - self.bc_weight_min) * frac
         else:
             w = self.bc_weight
         return u <= 0, w
@@ -189,7 +191,7 @@ class Trainer:
         if self.init_from:
             self.upd_info["bc_weight"] = self.warm.bc_weight
             print(f"[train] warm start: actor frozen for {self.warm.freeze_steps} steps, then BC weight "
-                  f"{self.warm.bc_weight:g} -> 0 over {self.warm.bc_decay_steps} steps; start_steps collected "
+                  f"{self.warm.bc_weight:g} -> {self.warm.bc_weight_min:g} over {self.warm.bc_decay_steps} steps; start_steps collected "
                   f"with the initial policy")
 
         self.best_metric = tr.get("best_metric", "mean")
@@ -203,9 +205,12 @@ class Trainer:
         """Train until train.total_steps, max_minutes (then snapshot for --resume), or Ctrl+C."""
         step = self.start - 1                                # transitions collected so far (all envs)
         obs, self.episodes.tasks = self.runner.reset()
-        t0 = time.time()
-        rate = lambda: (step - self.start + 1) / (time.time() - t0)  # noqa: E731
+        t0 = time.perf_counter()
+        rate = lambda: (step - self.start + 1) / (time.perf_counter() - t0)  # noqa: E731
         try:
+            if self.init_from and self.start == 1 and self.cfg["train"].get("eval_paired", False):
+                self._report(self.evaluator.run(self.agent, 0))
+                self._report(self.evaluator.poll(wait=True))
             while step < self.total_steps:
                 actions = self._act(obs, step)
                 self.runner.step_async(actions)
@@ -223,8 +228,8 @@ class Trainer:
                 self._housekeeping(prev, step)
 
                 # One env stops at an episode boundary (as before); with several, mid-episode is fine.
-                if max_minutes and time.time() - t0 > 60 * max_minutes and (self.runner.overlap or any_done):
-                    print(f"[train] {step - self.start + 1} steps in {(time.time() - t0) / 60:.1f} min "
+                if max_minutes and time.perf_counter() - t0 > 60 * max_minutes and (self.runner.overlap or any_done):
+                    print(f"[train] {step - self.start + 1} steps in {(time.perf_counter() - t0) / 60:.1f} min "
                           f"({rate():.0f} steps/s incl. evaluation)")
                     self._report(self.evaluator.poll(wait=True))
                     self._save_snapshot(step)
@@ -242,7 +247,7 @@ class Trainer:
                 self.runner.close()
 
         self.agent.save(os.path.join(self.ckpt_dir, "latest.pt"), step)
-        print(f"[train] done in {(time.time() - t0) / 60:.1f} min ({rate():.0f} steps/s incl. evaluation)")
+        print(f"[train] done in {(time.perf_counter() - t0) / 60:.1f} min ({rate():.0f} steps/s incl. evaluation)")
 
     # ------------------------------------------------------------------ steps of the loop
     def _act(self, obs, step):
@@ -286,6 +291,12 @@ class Trainer:
                 self.ev_log.write({"step": ev.step, "task": t, **{k: round(x, 4) for k, x in v.items()}})
             print(f"[eval ] step {ev.step}: mean effort reduction {mean_red:+.1f}% | fail rate {fail:.2f} | "
                   + " ".join(f"{t}:{v['effort_reduction_pct']:+.0f}%" for t, v in res.items()))
+            if any(v.get("paired_evaluation", False) for v in res.values()):
+                complete = sum(int(v["complete_pairs"]) for v in res.values())
+                planned = sum(int(v["evaluation_pairs"]) for v in res.values())
+                print(f"[eval ] paired complete {complete}/{planned} | "
+                      f"baseline fail rate {np.mean([v['baseline_fail_rate'] for v in res.values()]):.2f} | "
+                      f"inference={self.cfg['train'].get('eval_device', 'cpu')}")
             score = eval_score(res, self.best_metric)
             if score > self.best:
                 self.best = score

@@ -21,10 +21,12 @@ exo_hardware:                # CAD exoskeleton mounted on the human (exo_rl/sim/
   enabled: true
   spec: configs/exo_mk1.yaml
   quality: lo                # lo = light meshes for training; view.py switches to hi
+  mass_scale: 1.0            # all CAD exo masses/inertias; 0.7 tests a 30% lighter suit
 
 tasks:
   names: [squat, high_knees, quick_steps, backward_walk, walk]
   data_dir: null             # folder with <task>.csv recordings; synthetic placeholders otherwise
+  periods: {}               # optional seconds/cycle per motion, e.g. {walk: 2.2}; keeps joint angles
   # Extra test motions, selectable with --task / reset(options={"task": ...}) but not trained
   # on unless added to `names`: jog (grounded running), high_knees_travel (moves forward).
   extra_motions: [jog, high_knees_travel]
@@ -50,6 +52,7 @@ exo:                         # shared with hardware (exo_rl/control/torque_pipel
   max_torque: [40, 40, 40, 40]      # Nm; set to your actuator limits
   action_scale: [40, 40, 40, 40]
   rate_limit: 1500                  # Nm/s  (15 Nm per 10 ms step)
+  smoothing_seconds: 0.0            # command low-pass time constant; 0 preserves historical commands
   direction: [both, both, both, both]   # or flexion_only / extension_only for cables
   feedforward: limb_gravity         # none | limb_gravity
   alpha: 0.0                        # weight of feedforward; policy learns on top of it
@@ -66,6 +69,8 @@ reward:
   tracking_sigma_deg: 10
   w_smooth: 0.5
   w_magnitude: 0.05
+  w_assisted_joint: 0.0      # experimental Myo muscular moment demand at assisted hip/knee joints
+  # exo_torque_reference: [40, 40, 40, 40]  # optional reward scale independent of the hard cap
 
 termination:
   max_joint_error_deg: 45
@@ -90,6 +95,7 @@ agent:
   algo: td3                  # td3 | ddpg
   hidden: [256, 256]
   actor_lr: 0.0003
+  actor_logit_l2: 0.0       # optional squared pre-tanh output penalty; 0 preserves original TD3
   critic_lr: 0.0003
   gamma: 0.99
   tau: 0.005
@@ -103,6 +109,7 @@ agent:
   actor_freeze_steps: 20000  # only the critic learns for this many steps after start_steps
   bc_weight: 2.5             # actor loss = -Q/mean|Q| + w*||pi - pi_init||^2 (TD3+BC style) ...
   bc_decay_steps: 200000     # ... with w decaying linearly to 0 over this many steps after the freeze
+  bc_weight_min: 0.0         # optional decay floor; 0.5 retains some imitation protection
 
 train:
   total_steps: 1000000
@@ -111,6 +118,9 @@ train:
   eval_episodes: 5
   latest_every: 5000         # write checkpoints/latest.pt this often (also after every eval)
   eval_async: false          # true: evaluate in a background process while training continues
+  eval_paired: false         # complete paired comparisons; saves per-seed paired_eval.csv
+  eval_device: cpu           # inference device for paired evaluation, matching the default viewer
+  eval_seeds: null           # null uses 1000..1000+eval_episodes; or provide explicit paired seeds
   best_metric: mean          # best.pt by mean effort reduction over tasks | worst (worst task counts)
   save_every: 50000
   device: auto

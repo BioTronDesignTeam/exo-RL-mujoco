@@ -34,11 +34,13 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exo_rl.training import Trainer  # noqa: E402
 from exo_rl.utils import load_config  # noqa: E402
 
 
 def main():
+    # Windows workers re-import this script; only the parent needs PyTorch/CUDA.
+    from exo_rl.training import Trainer
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default="configs/default.yaml")
     ap.add_argument("--name", default=None, help="run folder runs/NAME (default: timestamp)")

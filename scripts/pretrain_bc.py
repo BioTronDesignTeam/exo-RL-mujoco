@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from exo_rl.agents.td3 import ReplayBuffer, TD3Agent  # noqa: E402
 from exo_rl.envs.exo_env import ExoAssistEnv  # noqa: E402
 from exo_rl.envs.vector import make_runner  # noqa: E402
-from exo_rl.evaluation import evaluate, no_exo_effort  # noqa: E402
+from exo_rl.evaluation import evaluate, frozen_policy, no_exo_effort, paired_training_results  # noqa: E402
 from exo_rl.utils import configure_torch_threads, load_config, pick_device  # noqa: E402
 from exo_rl.warmstart import Collector, causal_teacher, mse, train_bc  # noqa: E402
 
@@ -40,9 +40,15 @@ def report(cfg, agent, fraction, episodes):
     """Teacher and BC policy effort per task: vs exo off, and net vs not wearing the exo."""
     tasks = cfg["tasks"]["names"]
     env = ExoAssistEnv(cfg, seed=0)
-    no_exo = no_exo_effort(cfg, tasks, episodes, seed0=2000)
-    res_t, base = evaluate(env, causal_teacher(env, fraction), tasks, episodes, seed0=2000)
-    res_b, _ = evaluate(env, lambda o: agent.act(o, 0.0), tasks, episodes, seed0=2000, baseline=base)
+    if cfg["train"].get("eval_paired", False):
+        seeds = list(range(2000, 2000 + episodes))
+        no_exo = {}
+        res_t, _ = paired_training_results(env, causal_teacher(env, fraction), tasks, seeds)
+        res_b, _ = paired_training_results(env, frozen_policy(agent, cfg["train"].get("eval_device", "cpu")), tasks, seeds)
+    else:
+        no_exo = no_exo_effort(cfg, tasks, episodes, seed0=2000)
+        res_t, base = evaluate(env, causal_teacher(env, fraction), tasks, episodes, seed0=2000)
+        res_b, _ = evaluate(env, lambda o: agent.act(o, 0.0), tasks, episodes, seed0=2000, baseline=base)
     net = lambda r, t: f"{100 * (1 - r[t]['effort'] / no_exo[t]):+13.1f}%" if no_exo else ""  # noqa: E731
     hdr = f"{'net vs no exo':>14s}" if no_exo else ""
     print(f"\n{'task':15s}{'policy':9s}{'effort':>8s}{'vs exo off':>12s}{hdr}{'fail':>6s}")
@@ -50,6 +56,9 @@ def report(cfg, agent, fraction, episodes):
         for label, r in (("teacher", res_t), ("BC", res_b)):
             print(f"{t:15s}{label:9s}{r[t]['effort']:8.3f}{r[t]['effort_reduction_pct']:+11.1f}%{net(r, t)}"
                   f"{r[t]['fail_rate']:6.2f}")
+            if cfg["train"].get("eval_paired", False):
+                print(f"  paired complete {int(r[t]['complete_pairs'])}/{int(r[t]['evaluation_pairs'])}; "
+                      f"baseline fail rate {r[t]['baseline_fail_rate']:.2f}")
     print("(teacher acts on last step's tau_needed; BC on sensor observations only)")
 
 

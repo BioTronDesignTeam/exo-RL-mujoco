@@ -124,6 +124,9 @@ class TD3Agent:
         self.policy_noise = float(cfg["policy_noise"]) if twin else 0.0
         self.noise_clip = float(cfg["noise_clip"])
         self.policy_delay = int(cfg["policy_delay"]) if twin else 1
+        self.actor_logit_l2 = float(cfg.get("actor_logit_l2", 0.0))
+        if not np.isfinite(self.actor_logit_l2) or self.actor_logit_l2 < 0:
+            raise ValueError("agent.actor_logit_l2 must be finite and nonnegative")
         self.obs_dim, self.act_dim = obs_dim, act_dim
         self.updates = 0
         self.actor_bc = None             # frozen reference policy for BC regularization
@@ -163,7 +166,11 @@ class TD3Agent:
         self.updates += 1
         if self.updates % self.policy_delay == 0:
             if not actor_frozen:
-                pi = self.actor(o)
+                if self.actor_logit_l2 > 0:
+                    logits = self.actor.net[:-1](o)
+                    pi = torch.tanh(logits)
+                else:
+                    pi = self.actor(o)
                 q = self.critic(o, pi)[0]
                 if self.actor_bc is None:
                     actor_loss = -q.mean()
@@ -172,7 +179,14 @@ class TD3Agent:
                     if bc_weight > 0:
                         with torch.no_grad():
                             a_bc = self.actor_bc(o)
-                        actor_loss = actor_loss + bc_weight * ((pi - a_bc) ** 2).sum(-1).mean()
+                        actor_loss = (
+                            actor_loss + bc_weight * ((pi - a_bc) ** 2).sum(-1).mean()
+                        )
+                if self.actor_logit_l2 > 0:
+                    # Unlike an action-space penalty, this still supplies a recovery gradient when tanh is numerically saturated.
+                    actor_loss = (
+                        actor_loss + self.actor_logit_l2 * logits.square().mean()
+                    )
                 self.actor_opt.zero_grad()
                 actor_loss.backward()
                 self.actor_opt.step()

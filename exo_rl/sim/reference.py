@@ -11,14 +11,34 @@ Joint order: hip_l, knee_l, ankle_l, hip_r, knee_r, ankle_r
 """
 from __future__ import annotations
 
+import copy
 import csv
+import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
 from .model_builder import HUMAN_JOINTS
+
+
+def resolve_motion_path(path: str | Path) -> Path:
+    """Resolve historical CSV paths without changing the data used by old runs."""
+    target = Path(path)
+    if target.is_file():
+        return target
+    root = Path(__file__).resolve().parents[2] / "data" / "motions"
+    try:
+        relative = target.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return target
+    manifest = root / "archive" / "manifest.json"
+    if not manifest.is_file():
+        return target
+    archived = json.loads(manifest.read_text(encoding="utf-8-sig"))["legacy_paths"].get(relative)
+    return root / archived if archived is not None else target
 
 
 def _pg(phi, mu, sigma):
@@ -175,8 +195,8 @@ class TabulatedMotion:
     The time span of the file is treated as one period and looped.
     """
 
-    def __init__(self, path: str, name: str | None = None):
-        with open(path, newline="") as f:
+    def __init__(self, path: str | Path, name: str | None = None):
+        with open(resolve_motion_path(path), newline="") as f:
             rows = list(csv.DictReader(f))
         self.name = name or os.path.splitext(os.path.basename(path))[0]
         self.t = np.array([float(r["time"]) for r in rows])
@@ -205,6 +225,8 @@ _JOG = make_gait_table(trunk_deg=8.0, stance=0.55, swing_knee=85.0, stance_knee=
 _HIGH_KNEES_TRAVEL = make_gait_table(trunk_deg=5.0, stance=0.55, swing_knee=105.0, clearance=0.03,
                                      hip_waypoints=[(0.0, 15), (0.55, -10), (0.78, 85)])
 
+TRAVELING_MOTIONS = frozenset({"walk", "fast_walk", "backward_walk", "jog", "high_knees_travel"})
+
 SYNTHETIC = {
     "walk": TableMotion("walk", 1.10, _WALK, trunk_deg=3.0),
     "fast_walk": TableMotion("fast_walk", 0.85, _FAST_WALK, trunk_deg=5.0),
@@ -218,17 +240,26 @@ SYNTHETIC = {
 }
 
 
-def load_motions(names, data_dir: str | None = None) -> dict:
+def load_motions(names, data_dir: str | None = None, periods: dict | None = None) -> dict:
     """Load requested motions, preferring CSVs in data_dir over synthetic placeholders."""
     motions = {}
     for n in names:
-        path = os.path.join(data_dir, f"{n}.csv") if data_dir else None
+        path = resolve_motion_path(os.path.join(data_dir, f"{n}.csv")) if data_dir else None
         if path and os.path.exists(path):
             motions[n] = TabulatedMotion(path, n)
         elif n in SYNTHETIC:
             motions[n] = SYNTHETIC[n]
         else:
             raise ValueError(f"No motion '{n}' in {data_dir} and no synthetic fallback.")
+        if periods and n in periods:
+            period = float(periods[n])
+            if not np.isfinite(period) or period <= 0:
+                raise ValueError(f"Motion period for {n!r} must be finite and positive")
+            motion = copy.deepcopy(motions[n])
+            if isinstance(motion, TabulatedMotion):
+                motion.t *= period / motion.period
+            motion.period = period
+            motions[n] = motion
     return motions
 
 
@@ -240,16 +271,39 @@ def _smoothstep(x):
 class ReferenceTrajectory:
     """A time-indexed reference: one task, or a circuit of tasks with blended transitions."""
 
-    def __init__(self, segments, blend: float = 0.5, t_offset: float = 0.0):
+    def __init__(self, segments, blend: float = 0.5, t_offset: float = 0.0, startup_seconds: float = 0.0):
         # segments: list of (motion, duration)
         self.segments = segments
         self.blend = blend
         self.t_offset = t_offset
+        self.startup_seconds = float(startup_seconds)
+        if not np.isfinite(self.startup_seconds) or self.startup_seconds < 0:
+            raise ValueError("Reference startup_seconds must be finite and nonnegative")
+        if self.startup_seconds and len(segments) != 1:
+            raise ValueError("Reference startup currently supports a single motion")
         self.starts = np.cumsum([0.0] + [d for _, d in segments[:-1]])
 
     @property
     def name(self) -> str:
         return "+".join(m.name for m, _ in self.segments)
+
+    def clock(self, t):
+        """Integrate a smooth zero-to-full cadence ramp without a pose jump."""
+        duration = self.startup_seconds
+        if not duration:
+            return t
+        if t <= 0:
+            return 0.0
+        if t >= duration:
+            return t - duration / 2
+        u = t / duration
+        return duration * (u ** 3 - .5 * u ** 4)
+
+    def clock_rate(self, t):
+        if not self.startup_seconds:
+            return 1.0
+        u = float(np.clip(t / self.startup_seconds, 0., 1.))
+        return u * u * (3 - 2 * u)
 
     def weights(self, t):
         if len(self.segments) == 1:
@@ -264,7 +318,7 @@ class ReferenceTrajectory:
         return w / max(w.sum(), 1e-9)
 
     def angles(self, t):
-        t = t + self.t_offset
+        t = self.clock(t) + self.t_offset
         w = self.weights(t)
         q = np.zeros(len(HUMAN_JOINTS))
         trunk = 0.0
@@ -286,7 +340,7 @@ class ReferenceTrajectory:
 
     def active(self, t):
         """(task name, phase in [0,1)) of the dominant segment, for logging/plots only."""
-        t = t + self.t_offset
+        t = self.clock(t) + self.t_offset
         i = int(np.argmax(self.weights(t)))
         m = self.segments[i][0]
         local = t - self.starts[i] if len(self.segments) > 1 else t

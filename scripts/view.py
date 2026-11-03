@@ -27,15 +27,37 @@ def run_live(env, policy, args):
     macos_viewer_hint("scripts/view.py")
     stats, obs = Stats(), np.concatenate(env.obs_builder.frames)
     view = LiveView(env, args.camera, args.speed)
+    finished = False
+    status, last_info = "Running", None
+    hud, next_hud, previous_status = None, 0., None
     try:
-        while view.running() and (args.seconds is None or env.t < args.seconds):
-            a = policy(obs) if policy else np.zeros(4)
-            obs, _, term, _, info = env.step(a)
-            stats.update(env, info)
-            if term:
-                print(f"episode ended: {info['terminated_reason']}")
-                break
-            view.show(env)
+        while view.running():
+            if not finished:
+                if args.seconds is not None and env.t >= args.seconds:
+                    print("Simulation duration reached. Close the viewer window to exit.", flush=True)
+                    finished = True
+                    status = "Finished (close window to exit)"
+                else:
+                    a = policy(obs) if policy else np.zeros(4)
+                    obs, _, term, _, info = env.step(a)
+                    last_info = info
+                    stats.update(env, info)
+                    if term:
+                        print(f"episode ended: {info['terminated_reason']}. Close the viewer window to exit.", flush=True)
+                        finished = True
+                        status = f"Stopped: {info['terminated_reason']}"
+            if env.t >= next_hud or status != previous_status:
+                labels, values = "Status\nSimulation time", f"{status}\n{env.t:.1f} s"
+                if last_info is not None and "posture" in last_info:
+                    angles = last_info["posture"]
+                    labels += "\nPelvis\nSpine flexion\nTorso\nWorld X"
+                    values += (f"\n{np.degrees(angles['pelvis']):.1f} deg"
+                               f"\n{np.degrees(angles['lumbar']):.1f} deg"
+                               f"\n{np.degrees(angles['torso']):.1f} deg"
+                               f"\n{env.hm.data.qpos[env.hm.root_qpos[0]]:.2f} m")
+                hud = labels, values
+                next_hud, previous_status = env.t + .25, status
+            view.show(env, hud)
     finally:
         view.close()
     return stats
@@ -55,13 +77,15 @@ def main():
     ap.add_argument("--ckpt", default="best.pt")
     ap.add_argument("--config", default="configs/default.yaml")
     ap.add_argument("--set", action="append", default=[], help="config override, e.g. exo.alpha=0.5")
-    ap.add_argument("--mode", choices=["policy", "off", "feedforward"])
+    ap.add_argument("--mode", choices=["policy", "off", "feedforward", "teacher"],
+                    help="teacher is a privileged simulation-only assistance baseline")
     ap.add_argument("--task", default="squat",
                     help="squat | high_knees | quick_steps | backward_walk | walk | jog | high_knees_travel | circuit")
     ap.add_argument("--camera", choices=["track", "fixed"], default="track",
                     help="track follows the pelvis; fixed is a static side view showing forward travel")
     ap.add_argument("--speed", type=float, default=1.0, help="real-time factor (0.25 = slow motion)")
-    ap.add_argument("--seconds", type=float, default=None)
+    ap.add_argument("--seconds", type=float, default=None,
+                    help="simulation/video duration; live view keeps the final frame until you close the window")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--randomize", action="store_true", help="random subject instead of nominal")
     ap.add_argument("--no-exo", action="store_true", help="hide/remove the CAD exo (human + payload only)")
@@ -73,6 +97,7 @@ def main():
 
     cfg = view_config(args.run, args.config, args.set, args.no_exo)
     mode = args.mode or ("policy" if args.run else "off")
+    print(f"Preparing {args.task} ({mode}); Myo configs may include muscle settling...", flush=True)
     env = make_view_env(cfg, args.task, mode, args.seed, args.randomize)
     if args.save_xml:
         with open(args.save_xml, "w") as f:
@@ -86,8 +111,10 @@ def main():
         return
     if env.exo_hw is not None:
         print(env.exo_hw.report(env.hm.segments.thigh_len))
-    print(f"task={args.task} mode={mode} policy={'yes' if args.run else 'no'}")
+    print(f"task={args.task} mode={mode} policy={'yes' if args.run and mode == 'policy' else 'no'}")
     policy = load_policy(os.path.join(args.run, "checkpoints", args.ckpt))[0] if args.run and mode == "policy" else None
+    if not args.record:
+        print("Opening MuJoCo viewer; close its window to exit.", flush=True)
     stats = run_record(env, policy, args) if args.record else run_live(env, policy, args)
     if stats.effort:
         print(f"session mean human effort: {np.mean(stats.effort):.3f}")
