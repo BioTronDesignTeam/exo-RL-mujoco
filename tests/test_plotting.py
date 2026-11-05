@@ -1,5 +1,5 @@
 """Training plots from fake episodes.csv / eval.csv files: loading, best step, and the saved PNG."""
-from exo_rl.plotting import best_step, load_run, plot_training
+from exo_rl.plotting import best_metric, best_step, load_run, plot_training
 
 
 def make_run(path, evals=True):
@@ -20,6 +20,15 @@ def test_load_run_skips_half_written_row_and_finds_best_step(tmp_path):
     assert sorted(ev) == ["squat", "walk"]
     assert best_step(ev) == (20000.0, 15.0)
     assert load_run(make_run(tmp_path / "b", evals=False))[1] == {}  # no eval.csv
+
+
+def test_best_step_follows_the_runs_best_metric(tmp_path):
+    run = make_run(tmp_path / "a")
+    assert best_metric(run) == "mean"                                # no config.yaml
+    (tmp_path / "a" / "config.yaml").write_text("train:\n  best_metric: worst\n")
+    _, ev = load_run(run)
+    assert best_metric(run) == "worst"
+    assert best_step(ev, "worst") == (10000.0, 0.0)  # worst task 0 at both evals; a tie keeps the first
 
 
 def test_plot_training_saves_png_for_one_and_several_runs(tmp_path):

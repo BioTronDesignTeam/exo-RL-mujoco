@@ -13,7 +13,7 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 54 tests, ~1.5 min — confirms everything works
+python -m pytest                # 76 tests, ~4 min — confirms everything works
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
@@ -373,7 +373,7 @@ exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing 
 scripts/          train, pretrain_bc, view, plot_training, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            54 tests (run by CI on every PR)
+tests/            76 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```
 

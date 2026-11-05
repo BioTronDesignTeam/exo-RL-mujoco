@@ -10,8 +10,9 @@ import matplotlib
 matplotlib.use("Agg")  # no GUI backend, for headless servers
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+import yaml  # noqa: E402
 
-# Style rules shared by every training plot (see the task notes): colors in this fixed order,
+# Style rules shared by every training plot: colors in this fixed order,
 # assigned per task (or per run) and never by rank, so a task keeps its color in every plot.
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 TASKS = ["squat", "high_knees", "quick_steps", "backward_walk", "walk", "jog", "high_knees_travel"]
@@ -87,24 +88,36 @@ def smooth(step: np.ndarray, x: np.ndarray, n: int = 20) -> tuple[np.ndarray, np
     return step[n - 1:], np.convolve(x, np.ones(n) / n, mode="valid")
 
 
-def eval_scores(ev: dict) -> tuple[np.ndarray, np.ndarray]:
+def best_metric(run_dir: str) -> str:
+    """The run's train.best_metric from its config.yaml ("mean" if unset or unreadable)."""
+    try:
+        with open(os.path.join(run_dir, "config.yaml")) as f:
+            return (yaml.safe_load(f) or {}).get("train", {}).get("best_metric", "mean")
+    except OSError:
+        return "mean"
+
+
+def eval_scores(ev: dict, metric: str = "mean") -> tuple[np.ndarray, np.ndarray]:
     """(steps, checkpoint score) for every complete evaluation; empty arrays with no eval data.
 
-    Same rule training uses to save best.pt (eval_score in exo_rl/evaluation.py, metric="mean"):
-    mean effort reduction over tasks minus 100 x mean fail rate.
+    Same rule training uses to save best.pt (eval_score in exo_rl/evaluation.py):
+    mean: mean effort reduction over tasks minus 100 x mean fail rate;
+    worst: the same per task, worst task counts.
     """
     if not ev:
         return np.array([]), np.array([])
     n = min(len(g["step"]) for g in ev.values())  # an eval still being written has fewer tasks
     steps = next(iter(ev.values()))["step"][:n]
+    if metric == "worst":
+        return steps, np.min([g["reduction"][:n] - 100.0 * g["fail"][:n] for g in ev.values()], axis=0)
     reduction = np.mean([g["reduction"][:n] for g in ev.values()], axis=0)
     fail = np.mean([g["fail"][:n] for g in ev.values()], axis=0)
     return steps, reduction - 100.0 * fail
 
 
-def best_step(ev: dict) -> tuple[float, float] | None:
+def best_step(ev: dict, metric: str = "mean") -> tuple[float, float] | None:
     """Eval step with the highest checkpoint score, and that score; None with no eval data."""
-    steps, score = eval_scores(ev)
+    steps, score = eval_scores(ev, metric)
     if len(score) == 0:
         return None
     i = int(np.argmax(score))
@@ -142,13 +155,14 @@ def style_episode_axes(axes, n: int) -> None:
     style_axis(axes[1], f"Human effort in training (moving average of {n} episodes, lower is better)",
                "human effort")
 
+
 def outside_legend(ax) -> None:
     """Legend just right of the graph, so it never covers a line."""
     ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9, frameon=False)
 
 
 def no_evals_note(ax) -> None:
-    """Placeholder text for a run with no evaluations yet (before step 10,000)."""
+    """Placeholder text for a run with no evaluations yet (before the first train.eval_every)."""
     ax.text(0.5, 0.5, "no evaluations yet", transform=ax.transAxes, ha="center", color="#555555")
 
 
@@ -174,9 +188,10 @@ def plot_run(run_dir: str, out: str, n: int = 20) -> str:
     for task, g in ev.items():
         axes[2].plot(g["step"], g["reduction"], color=task_color(task), linewidth=LINE_W, marker="o",
                      markersize=4, label=task)
-    best = best_step(ev)
+    metric = best_metric(run_dir)
+    best = best_step(ev, metric)
     if best is not None:
-        label = f"best.pt: step {best[0]:,.0f} (score {best[1]:.1f})"
+        label = f"best.pt: step {best[0]:,.0f} ({metric} score {best[1]:.1f})"
         for ax in axes:
             ax.axvline(best[0], color="#555555", linestyle="--", linewidth=1, label=label)
     if ev:
@@ -200,13 +215,14 @@ def plot_compare(run_dirs: list[str], out: str, n: int = 20) -> str:
         ep, ev = load_run(run_dir)
         color, name = COLORS[i % len(COLORS)], run_name(run_dir)
         draw_episode_curves(axes, ep, n, color, label=name if len(ep["step"]) else f"{name} (no episodes yet)")
-        steps, score = eval_scores(ev)
+        metric = best_metric(run_dir)
+        steps, score = eval_scores(ev, metric)
         if len(score) == 0:
             continue
         any_evals = True
-        best = best_step(ev)
+        best = best_step(ev, metric)
         axes[2].plot(steps, score, color=color, linewidth=LINE_W, marker="o", markersize=4,
-                     label=f"{name} (best.pt: step {best[0]:,.0f})")
+                     label=f"{name} (best.pt: step {best[0]:,.0f}" + (f", {metric})" if metric != "mean" else ")"))
         axes[2].plot(best[0], best[1], color=color, marker="*", markersize=14, linestyle="none")
 
     style_episode_axes(axes, n)
@@ -218,7 +234,7 @@ def plot_compare(run_dirs: list[str], out: str, n: int = 20) -> str:
     else:
         no_evals_note(axes[2])
     style_axis(axes[2], "Evaluation: checkpoint score (★ = best.pt)",
-               "mean effort reduction − 100 × fail rate (%)")
+               "effort reduction − 100 × fail rate (%)")
     axes[2].set_xlabel("training step")
     return save_figure(fig, f"Training comparison: {', '.join(run_name(r) for r in run_dirs)}", out)
 
