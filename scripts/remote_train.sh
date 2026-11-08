@@ -67,8 +67,8 @@ fi
 PY=venv/bin/python
 [ -x "$PY" ] || PY=venv/Scripts/python.exe
 if printf '%s\n' "${EXTRA[@]}" | grep -q '^human.model=myo$' && ! "$PY" -c "import myo_sim" 2>/dev/null; then
-    echo "[setup] installing the MyoLeg model (requirements-myo.txt)"
-    "$PY" -m pip install -q -r requirements-myo.txt
+    echo "[setup] installing the MyoLeg model (myo-sim, requirements.txt)"
+    "$PY" -m pip install -q -r requirements.txt
 fi
 
 if [ -z "$ENVS" ]; then

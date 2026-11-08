@@ -19,7 +19,7 @@ lean_info=True (training) returns only the small info fields training needs
 
 human.model (config) picks the simulated human: "torque" (default) is the planar torque-driven
 model (sim/model_builder.py + sim/human.py); "myo" is the MyoLeg musculoskeletal model
-(sim/myo_model.py + sim/muscle_human.py, needs requirements-myo.txt). With "myo", effort is the
+(sim/myo_model.py + sim/muscle_human.py, needs myo-sim). With "myo", effort is the
 mean squared activation of the 80 muscles, the exo torque is applied by its motors, and tracking
 is measured against the balance-shifted reference the muscles follow.
 

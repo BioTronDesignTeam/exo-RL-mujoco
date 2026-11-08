@@ -6,3 +6,4 @@ pyyaml>=6.0
 matplotlib>=3.7
 pytest>=7.0
 imageio[ffmpeg]>=2.30        # videos: view.py --record, watch_training.py --record-dir
+myo-sim==0.2.3               # MyoLeg muscle model (human.model: myo); model files only, Apache-2.0

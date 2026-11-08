@@ -38,7 +38,7 @@ tasks:
   blend_seconds: 0.5
 
 human:                       # Level-1 active human model (see exo_rl/sim/human.py)
-  model: torque              # torque: planar torque-driven human | myo: MyoLeg muscles (requirements-myo.txt)
+  model: torque              # torque: planar torque-driven human | myo: MyoLeg muscles (myo-sim)
   kp: {hip: 800, knee: 800, ankle: 600}
   kd: {hip: 60, knee: 50, ankle: 30}
   ki: {hip: 1200, knee: 1200, ankle: 800}

@@ -1,4 +1,4 @@
-"""MyoLeg musculoskeletal model (optional dependency: pip install -r requirements-myo.txt)."""
+"""MyoLeg musculoskeletal model (myo-sim, in requirements.txt)."""
 import mujoco
 import numpy as np
 import pytest

@@ -11,7 +11,7 @@ top-level file; myolegs_xml() assembles them the same way MyoSuite's myolegs_wit
 does, on our own floor; MyoSuite's torso is not part of the pip package, so ours is a capsule
 sized like the planar model's trunk.
 
-Install: pip install -r requirements-myo.txt   (myo-sim, Apache-2.0, needs mujoco >= 3.4)
+Install: myo-sim is in requirements.txt (Apache-2.0, needs mujoco >= 3.4)
 """
 from __future__ import annotations
 
