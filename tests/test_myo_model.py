@@ -58,24 +58,31 @@ def test_exo_attaches_to_myolegs():
     assert np.all(np.isfinite(d.qpos))
 
 
-def _track(motion: str, seconds: float):
+HIP_OFF_AXIS = [f"hip_{j}_{s}" for s in "lr" for j in ("adduction", "rotation")]
+
+
+def _track(motion: str, seconds: float, muscle: dict | None = None):
     import yaml
     from exo_rl.sim.muscle_human import MuscleHumanController, stand_on_floor
     from exo_rl.sim.reference import ReferenceTrajectory, load_motions
     cfg = yaml.safe_load(open("configs/default.yaml"))
+    cfg["human"]["muscle"].update(muscle or {})
     m = load_myolegs(SubjectParams(payload_mass=0.0))
     d = mujoco.MjData(m)
     ref = ReferenceTrajectory([(load_motions([motion])[motion], 1e9)])
     q, _, _, trunk, _ = ref.sample(0.0)
     stand_on_floor(m, d, q, trunk)
     hc = MuscleHumanController(m, cfg["human"], 75.0)
-    errs, effort = [], []
+    off_axis = [m.joint(j).qposadr[0] for j in HIP_OFF_AXIS]
+    errs, effort, hip = [], [], []
     for k in range(int(seconds / m.opt.timestep)):
         q, qd, qdd, trunk, trunk_d = ref.sample(k * m.opt.timestep)
         a, _ = hc.compute(d, q, qd, qdd, trunk, trunk_d, 0.0, np.zeros(4), m.opt.timestep)
         mujoco.mj_step(m, d)
         errs.append(hc.q_target - d.qpos[hc.qadr[:6]])
         effort.append(hc.effort(a))
+        hip.append(np.degrees(np.abs(d.qpos[off_axis])).max())
+    hc.max_hip_off_axis_deg = max(hip)
     return np.degrees(np.sqrt(np.mean(np.square(errs)))), np.array(effort), hc
 
 
@@ -88,6 +95,14 @@ def test_muscles_track_a_squat():
     rms, effort, hc = _track("squat", 2.5)           # one full squat
     assert rms < 3.0 and effort.mean() > 0.02        # tracked, and the muscles did the work
     assert np.all(np.abs(np.degrees(hc.lean)) < 15)  # balance shift stays small
+
+
+def test_hip_reserve_keeps_hip_adduction_and_rotation_near_zero():
+    _, _, held = _track("squat", 2.5)
+    _, _, free = _track("squat", 2.5, {"hip_reserve": False})
+    assert held.max_hip_off_axis_deg < 5.0           # with the reserve the hips stay in the sagittal plane
+    assert free.max_hip_off_axis_deg > 15.0          # muscles alone let them drift toward the joint limits
+    assert np.all(np.abs(held.hip_reserve) <= 100.0 + 1e-9) and not np.any(free.hip_reserve)
 
 
 def test_balance_shift_decays_while_moving():

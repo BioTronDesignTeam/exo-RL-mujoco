@@ -51,6 +51,8 @@ human:                       # Level-1 active human model (see exo_rl/sim/human.
     hold_kp: 400.0           # hip adduction/rotation, subtalar, MTP held at 0 (or the balance shift)
     hold_kd: 40.0
     held_weight: 0.3         # their weight in the activation solve, vs. 1 for the six tracked joints
+    hip_reserve: true        # reserve torque on hip adduction/rotation for what the muscles leave missing
+    hip_reserve_max_nm: 100.0   # at 75 kg, scaled with mass; reported as hip_reserve_nm, not effort
     activation_reg: 30.0     # cost of activation^2 vs. torque error^2 (Nm^2)
     solver_iters: 60
     activation_dynamics: true

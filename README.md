@@ -13,11 +13,11 @@ Requires Python 3.10+.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest                # 76 tests, ~4 min — confirms everything works
+python -m pytest                # 77 tests, ~4 min — confirms everything works
 ```
 
 - **Video recording** uses `imageio[ffmpeg]` (in `requirements.txt`).
-- **Musculoskeletal human (experimental):** `pip install -r requirements-myo.txt`, then add `--set human.model=myo` to `pretrain_bc.py` / `train.py` to train on the MyoLeg model (80 muscles, exo CAD links and motors, rigid upper body + payload) instead of the planar torque-driven human. Effort becomes mean muscle activation² (static optimization, `exo_rl/sim/muscle_human.py`, settings under `human.muscle`). Observations and actions are unchanged, so policies transfer between models. About 5x slower per environment (~90 steps/s); the leg size is fixed (height only sets the trunk); high knees end early more often than on the planar model.
+- **Musculoskeletal human (experimental):** `pip install -r requirements-myo.txt`, then add `--set human.model=myo` to `pretrain_bc.py` / `train.py` to train on the MyoLeg model (80 muscles, exo CAD links and motors, rigid upper body + payload) instead of the planar torque-driven human. Effort becomes mean muscle activation² (static optimization, `exo_rl/sim/muscle_human.py`, settings under `human.muscle`). Observations and actions are unchanged, so policies transfer between models. The muscles alone can't keep hip adduction/rotation at 0 while tracking flexion (the hips drift to 30–45°, swinging the exo thigh links up to 16 cm off their motors), so a reserve torque fills in what they leave missing there (`human.muscle.hip_reserve`, capped at `hip_reserve_max_nm`). It is not counted as effort; evaluation reports it as `hip_reserve_nm` (mean 10–25 Nm per joint on the ACE tasks). About 5x slower per environment (~90 steps/s); the leg size is fixed (height only sets the trunk); high knees end early more often than on the planar model.
 - **macOS live viewer:** use `mjpython` instead of `python` (`view.py`, `watch_training.py`).
 - **Headless Linux recording:** set `MUJOCO_GL=egl` (GPU) or `MUJOCO_GL=osmesa` (CPU, `apt install libosmesa6`).
 
@@ -373,7 +373,7 @@ exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing 
 scripts/          train, pretrain_bc, view, plot_training, watch_training, evaluate, export, exo_info
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     your motion recordings (CSV)
-tests/            76 tests (run by CI on every PR)
+tests/            77 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```
 

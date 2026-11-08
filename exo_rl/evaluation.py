@@ -22,7 +22,7 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
                 nominal: bool = True):
     obs, _ = env.reset(seed=seed, options={"exo_mode": mode, "task": task, "nominal": nominal})
     effort, err, dtau, peak, ret = [], [], [], 0.0, 0.0
-    trace, groups = [], []
+    trace, groups, reserve = [], [], []
     while True:
         a = policy(obs) if (policy is not None and mode == "policy") else np.zeros(4)
         obs, r, term, trunc, info = env.step(a)
@@ -34,6 +34,8 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
         peak = max(peak, float(np.max(np.abs(info["tau_exo_cmd"]))))
         if "muscle_groups" in info:
             groups.append(info["muscle_groups"])
+        if "hip_reserve_abs" in info:
+            reserve.append(float(np.mean(info["hip_reserve_abs"])))
         if record:
             trace.append({k: info[k] for k in ("q", "q_ref", "tau_human", "tau_exo_cmd", "phase", "task")})
         if term or trunc:
@@ -45,6 +47,8 @@ def run_episode(env: ExoAssistEnv, policy, task: str, mode: str, seed: int, reco
     }
     for g in (groups[0] if groups else {}):              # muscle model: mean activation per group
         out[f"act_{g}"] = float(np.mean([x[g] for x in groups]))
+    if reserve:                                          # muscle model: mean |hip reserve torque| per joint, Nm
+        out["hip_reserve_nm"] = float(np.mean(reserve))
     return (out, trace) if record else out
 
 

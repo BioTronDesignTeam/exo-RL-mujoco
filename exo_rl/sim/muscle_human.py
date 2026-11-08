@@ -12,7 +12,10 @@ weight from the start instead of waiting for the integral term, which the satura
 can't afford. W weights the six tracked joints above the held ones.
 
 The six joints of the planar model (hip flexion, knee, ankle per side) follow the reference;
-hip adduction/rotation, subtalar, and MTP are held at 0. A = moment arms x active muscle force
+hip adduction/rotation, subtalar, and MTP are held at 0. The muscles can't hold the hip ones while
+also tracking flexion (without help the hips end up against their adduction and rotation limits),
+so with hip_reserve a reserve torque (NOT human effort, reported as hip_reserve) supplies what the
+muscles leave missing on hip adduction/rotation, up to hip_reserve_max_nm. A = moment arms x active muscle force
 at the current fiber length and velocity, tau_passive = passive muscle force; both come from
 MuJoCo's muscle model. MyoLeg's knee is a coupled mechanism: the tibia translations and the
 patella follow the knee angle through equality constraints, and the quadriceps act on the knee
@@ -68,7 +71,8 @@ MUSCLE_GROUPS = {
 DEFAULTS = {"effort": "mean", "hold_kp": 400.0, "hold_kd": 40.0, "held_weight": 0.3, "activation_reg": 30.0, "solver_iters": 60,
             "activation_dynamics": True, "ground_filter_s": 0.02,
             "balance": True, "balance_when_moving": False, "com_damping": True, "balance_tau_s": 1.0, "support_tau_s": 0.2, "balance_max_deg": [15.0, 10.0],
-            "residual_roll_kp": 2000.0, "residual_roll_kd": 200.0, "residual_y_kv": 500.0}
+            "residual_roll_kp": 2000.0, "residual_roll_kd": 200.0, "residual_y_kv": 500.0,
+            "hip_reserve": True, "hip_reserve_max_nm": 100.0}
 
 
 def solve_activations(A: np.ndarray, b: np.ndarray, reg: float, a0: np.ndarray, iters: int) -> np.ndarray:
@@ -105,6 +109,9 @@ class MuscleHumanController:
         self.reg, self.iters = c["activation_reg"], int(c["solver_iters"])
         self.act_dyn, self.ground_tc = bool(c["activation_dynamics"]), float(c["ground_filter_s"])
         self.row_w = np.concatenate([np.ones(len(HUMAN_JOINTS)), np.full(n_held, c["held_weight"])])
+        # Reserve torques on hip adduction/rotation (rows of the controlled-joint vector).
+        self.reserve_rows = np.array([len(HUMAN_JOINTS) + i for i, n in enumerate(HELD) if n.startswith("hip_")])
+        self.reserve_max = float(c["hip_reserve_max_nm"]) * s if c["hip_reserve"] else 0.0
 
         joints = [model.joint(TRACKED[j]) for j in HUMAN_JOINTS] + [model.joint(n) for n in HELD]
         self.qadr = np.array([model.jnt_qposadr[j.id] for j in joints])
@@ -161,6 +168,7 @@ class MuscleHumanController:
         self.f_ground = None
         self.support = None                  # filtered COM-to-support gap (forward, left), m
         self.lean = np.zeros(2)              # balance offsets: forward (ankle/hip), sideways (hip adduction), rad
+        self.hip_reserve = np.zeros(len(self.reserve_rows))   # Nm on hip adduction/rotation l, r
 
     def coupling(self, d: mujoco.MjData) -> np.ndarray:
         """C = dq / dq_controlled (nv x controlled joints)."""
@@ -215,7 +223,7 @@ class MuscleHumanController:
 
     def compute(self, d: mujoco.MjData, q_ref, qd_ref, qdd_ref, trunk_ref, trunk_d_ref, v_ref: float,
                 tau_exo: np.ndarray, dt: float) -> tuple[np.ndarray, np.ndarray]:
-        """Sets the muscle activations and the root residual (qfrc_applied).
+        """Sets the muscle activations, the hip reserve, and the root residual (qfrc_applied).
         tau_exo is in exo order (hip_l, knee_l, hip_r, knee_r). Returns (activations, tau_muscle on the
         six tracked joints in HUMAN_JOINTS order)."""
         m = self.model
@@ -255,8 +263,11 @@ class MuscleHumanController:
             d.ctrl[self.muscles] = self.a
             d.act[self.act_adr] = self.a
         tau_muscle = A @ self.a + tau_passive
+        rr = self.reserve_rows
+        self.hip_reserve = np.clip(tau_h[rr] - tau_muscle[rr], -self.reserve_max, self.reserve_max)
+        d.qfrc_applied[self.dof[rr]] = self.hip_reserve
 
-        r, s = {**self.residual_extra, **self.residual}, self.mass_scale
+        r, s ={**self.residual_extra, **self.residual}, self.mass_scale
         v = d.qvel[self.root_v:self.root_v + 6].copy()
         if self.balance and self.com_damping:                  # damp the COM, not the pelvis
             mujoco.mj_subtreeVel(m, d)
