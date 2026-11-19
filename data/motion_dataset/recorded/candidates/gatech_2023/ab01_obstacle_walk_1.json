@@ -1,0 +1,92 @@
+{
+  "task": "obstacle_walk_1",
+  "dataset": "gatech_2023",
+  "subject": "AB01",
+  "source_doi": "https://doi.org/10.35090/gatech/70296",
+  "license": "CC-BY-4.0",
+  "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+  "archive_member": "AB01/obstacle_walk_1/AB01_obstacle_walk_1_angle.csv",
+  "member_crc32": "e9fcbfb9",
+  "original_file": "sources/gatech_2023/AB01_obstacle_walk_1_angle.csv",
+  "source_sha256": "64911b0375431c4600f87d616261b3913fd64861c05cdf3e373a428dd1d6052f",
+  "csv": "candidates/gatech_2023/ab01_obstacle_walk_1.csv",
+  "csv_sha256": "e5657cb3af34616f2f5ae109ab83551df20a2a6b330c5819c242bf5820017ea8",
+  "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+  "column_mapping": {
+    "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+    },
+    "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+    },
+    "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+    },
+    "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+    },
+    "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+    },
+    "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+    }
+  },
+  "preprocessing": [
+    "Select actual bilateral sagittal hip/knee/ankle columns",
+    "Subtract original first timestamp; preserve original sample spacing and duration",
+    "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+    "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+  ],
+  "motion_protocol": "obstacle_walk_1",
+  "limitations": "Verified joint-angle recording; protocol is not an exact mini-hurdle quick-step match. Do not silently substitute for quick_steps.",
+  "rows": 15001,
+  "source_start_time_s": 4.0,
+  "duration_s": 75.0,
+  "sampling_rate_hz": 200,
+  "angle_unit": "degree",
+  "time_unit": "second",
+  "sample_interval_s_range": [
+    0.0049999999999954525,
+    0.005000000000009663
+  ],
+  "finite_required_values": true,
+  "strictly_increasing_time": true,
+  "ranges_deg": {
+    "hip_l": [
+      -9.87802137,
+      55.26823474
+    ],
+    "knee_l": [
+      -7.17914269,
+      105.05739727
+    ],
+    "ankle_l": [
+      -28.08710142,
+      15.30844388
+    ],
+    "hip_r": [
+      -14.97817709,
+      49.68230504
+    ],
+    "knee_r": [
+      -6.59057926,
+      103.02837226
+    ],
+    "ankle_r": [
+      -32.5587303,
+      18.00897623
+    ]
+  },
+  "candidate_for": "quick_steps",
+  "accepted_as_exact_motion": false,
+  "motion_description": "Walking while a foam block is placed on the treadmill at 1.0 m/s",
+  "accepted_as_approximation": true,
+  "acceptance_date": "2026-11-14"
+}

@@ -11,7 +11,7 @@ Tasks that pass are written as <out>/<task>.csv; the rest keep their synthetic p
 (load_motions falls back per task). <out>/manifest.json records sources, hashes, processing,
 every metric and why a task was left out; <out>/README.md carries the attribution.
 
-    python scripts/prepare_motions.py --source "path/to/motion_data/recorded"
+    python scripts/prepare_motions.py              # collection in data/motion_dataset/ (not in git)
     python scripts/train.py --set human.model=myo --set tasks.data_dir=data/motions/gatech_ab01
 """
 from __future__ import annotations
@@ -113,7 +113,7 @@ def check(cfg: dict, task: str, args) -> tuple[dict, list]:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--source", required=True, help="collection folder holding catalog.json")
+    ap.add_argument("--source", default="data/motion_dataset/recorded", help="collection folder holding catalog.json")
     ap.add_argument("--out", default="data/motions/gatech_ab01")
     ap.add_argument("--human", choices=["myo", "torque"], default="myo",
                     help="human model the motions must work on (human.model)")

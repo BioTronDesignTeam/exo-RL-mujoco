@@ -325,7 +325,7 @@ unless `--init-from` is used.
 | `jog` | forward | no | Grounded running; fails with the unpowered exo worn |
 
 - **Train on a task:** add it to `tasks.names`.
-- **Use recorded motions:** `--set human.model=myo --set tasks.data_dir=data/motions/gatech_ab01` swaps in real squat, high knees, backward walk and walk (Georgia Tech 2023, subject AB01); `quick_steps` keeps its synthetic placeholder. `scripts/prepare_motions.py` builds that folder from the collected recordings and only writes tasks the MyoLeg human can perform; see `data/motions/gatech_ab01/README.md`.
+- **Use recorded motions:** `--set human.model=myo --set tasks.data_dir=data/motions/gatech_ab01` swaps in real squat, high knees, backward walk and walk (Georgia Tech 2023, subject AB01); `quick_steps` keeps its synthetic placeholder. `scripts/prepare_motions.py` builds that folder from the collected recordings in `data/motion_dataset/` (git tracks only the 3 MB it reads; the rest of the 1.6 GB collection stays local) and only writes tasks the MyoLeg human can perform; see `data/motions/gatech_ab01/README.md`.
 - **Use your own recordings:** put `<task>.csv` files in a folder and set `tasks.data_dir` to it (format in `data/motions/README.md`).
 
 ---
@@ -375,6 +375,7 @@ scripts/          train, pretrain_bc, view, plot_training, watch_training, evalu
                   prepare_motions
 deploy/           hardware loop, motor map, safety monitor
 data/motions/     motion recordings (CSV); gatech_ab01/ = prepared real motions
+data/motion_dataset/  collected source recordings (input to prepare_motions; only the used 3 MB in git)
 tests/            89 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```

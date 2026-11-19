@@ -10,3 +10,13 @@ venv
 
 # raw SolidWorks URDF exports (prepared copies live in assets/, see scripts/prepare_urdf.py)
 /MkI_FA900_Full_Body_Assembly/
+
+# collected motion recordings (1.6 GB; not all redistributable, see data/motion_dataset/README.md).
+# Only what scripts/prepare_motions.py reads is tracked: the catalog and the Georgia Tech trials (CC BY 4.0).
+/data/motion_dataset/*
+!/data/motion_dataset/README.md
+!/data/motion_dataset/recorded/
+/data/motion_dataset/recorded/*
+!/data/motion_dataset/recorded/catalog.json
+!/data/motion_dataset/recorded/gatech_2023/
+!/data/motion_dataset/recorded/candidates/

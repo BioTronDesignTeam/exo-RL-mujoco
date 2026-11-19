@@ -1,0 +1,87 @@
+{
+  "task": "squat",
+  "dataset": "gatech_2023",
+  "subject": "AB01",
+  "source_doi": "https://doi.org/10.35090/gatech/70296",
+  "license": "CC-BY-4.0",
+  "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+  "archive_member": "AB01/squats_1_0lbs/AB01_squats_1_0lbs_angle.csv",
+  "member_crc32": "67f09c14",
+  "original_file": "sources/gatech_2023/AB01_squats_1_0lbs_angle.csv",
+  "source_sha256": "eeda45487384755682226d0f86440d4186f3d363e0fcba1a9cd5b515c160cff4",
+  "csv": "gatech_2023/ab01_squat.csv",
+  "csv_sha256": "344776e7bbbd786706449345061ad59580a94b01066030b750cc827f2fac31cd",
+  "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+  "column_mapping": {
+    "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+    },
+    "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+    },
+    "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+    },
+    "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+    },
+    "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+    },
+    "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+    }
+  },
+  "preprocessing": [
+    "Select actual bilateral sagittal hip/knee/ankle columns",
+    "Subtract original first timestamp; preserve original sample spacing and duration",
+    "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+    "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+  ],
+  "motion_protocol": "squats_1_0lbs",
+  "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping.",
+  "rows": 2501,
+  "source_start_time_s": 46.5,
+  "duration_s": 12.5,
+  "sampling_rate_hz": 200,
+  "angle_unit": "degree",
+  "time_unit": "second",
+  "finite_required_values": true,
+  "strictly_increasing_time": true,
+  "ranges_deg": {
+    "hip_l": [
+      -0.47341864,
+      113.94729783
+    ],
+    "knee_l": [
+      4.3979372,
+      143.10194699
+    ],
+    "ankle_l": [
+      -1.73226699,
+      41.01455241
+    ],
+    "hip_r": [
+      0.21028472,
+      111.60379359
+    ],
+    "knee_r": [
+      9.90712214,
+      147.79386676
+    ],
+    "ankle_r": [
+      -5.38295321,
+      43.97790191
+    ]
+  },
+  "sample_interval_s_range": [
+    0.0049999999999954525,
+    0.005000000000002558
+  ]
+}

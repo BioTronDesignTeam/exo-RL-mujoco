@@ -7,3 +7,10 @@ venv/
 .pytest_cache/
 runs/*
 !runs/demo/
+data/motion_dataset/*
+!data/motion_dataset/README.md
+!data/motion_dataset/recorded/
+data/motion_dataset/recorded/*
+!data/motion_dataset/recorded/catalog.json
+!data/motion_dataset/recorded/gatech_2023/
+!data/motion_dataset/recorded/candidates/

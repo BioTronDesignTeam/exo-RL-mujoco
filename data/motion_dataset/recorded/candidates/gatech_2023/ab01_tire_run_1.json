@@ -1,0 +1,92 @@
+{
+  "task": "tire_run_1",
+  "dataset": "gatech_2023",
+  "subject": "AB01",
+  "source_doi": "https://doi.org/10.35090/gatech/70296",
+  "license": "CC-BY-4.0",
+  "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+  "archive_member": "AB01/tire_run_1/AB01_tire_run_1_angle.csv",
+  "member_crc32": "a8d18b20",
+  "original_file": "sources/gatech_2023/AB01_tire_run_1_angle.csv",
+  "source_sha256": "acdf33e44c5fcc04bed264b13fd0b92455854c9f863f5ab02f6c5263373abcbc",
+  "csv": "candidates/gatech_2023/ab01_tire_run_1.csv",
+  "csv_sha256": "a41ed923cf71709161901332248f8bb5cb67d947935a44d1c17557b686e61c99",
+  "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+  "column_mapping": {
+    "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+    },
+    "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+    },
+    "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+    },
+    "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+    },
+    "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+    },
+    "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+    }
+  },
+  "preprocessing": [
+    "Select actual bilateral sagittal hip/knee/ankle columns",
+    "Subtract original first timestamp; preserve original sample spacing and duration",
+    "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+    "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+  ],
+  "motion_protocol": "tire_run_1",
+  "limitations": "Verified joint-angle recording; protocol is not an exact mini-hurdle quick-step match. Do not silently substitute for quick_steps.",
+  "rows": 10321,
+  "source_start_time_s": 1.1,
+  "duration_s": 51.6,
+  "sampling_rate_hz": 200,
+  "angle_unit": "degree",
+  "time_unit": "second",
+  "sample_interval_s_range": [
+    0.0049999999999954525,
+    0.005000000000002558
+  ],
+  "finite_required_values": true,
+  "strictly_increasing_time": true,
+  "ranges_deg": {
+    "hip_l": [
+      4.10065498,
+      49.19509873
+    ],
+    "knee_l": [
+      -3.0530464,
+      86.84757516
+    ],
+    "ankle_l": [
+      -29.92869324,
+      23.43952486
+    ],
+    "hip_r": [
+      0.40552902,
+      46.89563283
+    ],
+    "knee_r": [
+      1.1206798,
+      76.86190251
+    ],
+    "ankle_r": [
+      -25.62298575,
+      27.32980846
+    ]
+  },
+  "candidate_for": "quick_steps",
+  "accepted_as_exact_motion": false,
+  "motion_description": "Jogging on toes overground with high knees, as if running through tires",
+  "accepted_as_approximation": true,
+  "acceptance_date": "2026-11-14"
+}

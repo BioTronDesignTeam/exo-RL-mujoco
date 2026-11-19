@@ -19,8 +19,9 @@ Each file holds **one full cycle**, which is looped:
 `gatech_ab01/` holds recorded squat, high knees, backward walk and walk prepared this way and
 checked on the MyoLeg human; use it with `--set human.model=myo --set tasks.data_dir=data/motions/gatech_ab01`.
 
-`scripts/prepare_motions.py` (logic in `exo_rl/motion_data.py`) turns a long recording into such a
-file: it averages the repeats, smooths and loops the cycle, keeps it inside the human model's joint
+`scripts/prepare_motions.py` (logic in `exo_rl/motion_data.py`) turns a long recording from the
+collection in `data/motion_dataset/` (git tracks only the Georgia Tech trials it reads; the rest of
+the 1.6 GB is not all redistributable and stays local) into such a file: it averages the repeats, smooths and loops the cycle, keeps it inside the human model's joint
 range, and checks that the human model can perform it (keeping the feet flat if the recorded ankles
 fail). The tips below are what it does.
 

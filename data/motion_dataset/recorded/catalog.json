@@ -1,0 +1,942 @@
+{
+  "collection_date": "2026-11-14",
+  "required_columns": [
+    "time",
+    "hip_l",
+    "knee_l",
+    "ankle_l",
+    "hip_r",
+    "knee_r",
+    "ankle_r"
+  ],
+  "units": {
+    "time": "seconds",
+    "all_joint_angles": "degrees"
+  },
+  "coverage": {
+    "squat": {
+      "status": "verified_recording",
+      "files": [
+        "gatech_2023/ab01_squat.csv"
+      ]
+    },
+    "walk": {
+      "status": "verified_recording",
+      "files": [
+        "gatech_2023/ab01_walk.csv",
+        "opensim_gait2392/subject01_walk.csv"
+      ]
+    },
+    "backward_walk": {
+      "status": "verified_recording",
+      "files": [
+        "gatech_2023/ab01_backward_walk.csv"
+      ]
+    },
+    "high_knees": {
+      "status": "verified_recording",
+      "files": [
+        "gatech_2023/ab01_high_knees.csv"
+      ]
+    },
+    "quick_steps": {
+      "status": "verified_approximation",
+      "reason": "User accepted clearly labelled obstacle-crossing/rapid-stepping substitutes on 2026-11-14. Neither protocol is an exact mini-hurdle recording.",
+      "files": [
+        "candidates/gatech_2023/ab01_obstacle_walk_1.csv",
+        "candidates/gatech_2023/ab01_tire_run_1.csv"
+      ]
+    }
+  },
+  "recordings": [
+    {
+      "task": "backward_walk",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/walk_backward_1_0-6/AB01_walk_backward_1_0-6_angle.csv",
+      "member_crc32": "d6df944d",
+      "original_file": "sources/gatech_2023/AB01_walk_backward_1_0-6_angle.csv",
+      "source_sha256": "43ee5fb04a2f5509ec6c0b8df9e8cea9f2bae4a726e27159708a611f6bfcce38",
+      "csv": "gatech_2023/ab01_backward_walk.csv",
+      "csv_sha256": "7a59b387bdd7606bd5a9b3956d7f0f989bba9ba02ad8c798d0fa4aff1e2dc1c2",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "walk_backward_1_0-6",
+      "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping.",
+      "rows": 4001,
+      "source_start_time_s": 35.0,
+      "duration_s": 20.0,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -0.29510239,
+          18.16558417
+        ],
+        "knee_l": [
+          -6.52195791,
+          47.85888042
+        ],
+        "ankle_l": [
+          -16.81407947,
+          17.32027534
+        ],
+        "hip_r": [
+          -5.72959203,
+          18.97453315
+        ],
+        "knee_r": [
+          -6.30860523,
+          47.13968553
+        ],
+        "ankle_r": [
+          -16.38104249,
+          19.53240874
+        ]
+      },
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000002558
+      ]
+    },
+    {
+      "task": "high_knees",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/dynamic_walk_1_high-knees/AB01_dynamic_walk_1_high-knees_angle.csv",
+      "member_crc32": "a5a8646d",
+      "original_file": "sources/gatech_2023/AB01_dynamic_walk_1_high-knees_angle.csv",
+      "source_sha256": "b723fa2ee1b2bee22eac26f5bbb4a475520eedecd9b6c27bf55b49b92691b824",
+      "csv": "gatech_2023/ab01_high_knees.csv",
+      "csv_sha256": "301628a4e968d9a301a73c9ae991cfcc3eff544a1bccb07360852e028b6c574c",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "dynamic_walk_1_high-knees",
+      "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping.",
+      "rows": 4001,
+      "source_start_time_s": 105.0,
+      "duration_s": 20.0,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -0.59469973,
+          73.77880838
+        ],
+        "knee_l": [
+          11.85142894,
+          113.21890053
+        ],
+        "ankle_l": [
+          -37.54538605,
+          10.14731168
+        ],
+        "hip_r": [
+          -3.02532176,
+          68.56661304
+        ],
+        "knee_r": [
+          10.31616645,
+          117.07454962
+        ],
+        "ankle_r": [
+          -25.95579897,
+          12.51698308
+        ]
+      },
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000009663
+      ]
+    },
+    {
+      "task": "squat",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/squats_1_0lbs/AB01_squats_1_0lbs_angle.csv",
+      "member_crc32": "67f09c14",
+      "original_file": "sources/gatech_2023/AB01_squats_1_0lbs_angle.csv",
+      "source_sha256": "eeda45487384755682226d0f86440d4186f3d363e0fcba1a9cd5b515c160cff4",
+      "csv": "gatech_2023/ab01_squat.csv",
+      "csv_sha256": "344776e7bbbd786706449345061ad59580a94b01066030b750cc827f2fac31cd",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "squats_1_0lbs",
+      "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping.",
+      "rows": 2501,
+      "source_start_time_s": 46.5,
+      "duration_s": 12.5,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -0.47341864,
+          113.94729783
+        ],
+        "knee_l": [
+          4.3979372,
+          143.10194699
+        ],
+        "ankle_l": [
+          -1.73226699,
+          41.01455241
+        ],
+        "hip_r": [
+          0.21028472,
+          111.60379359
+        ],
+        "knee_r": [
+          9.90712214,
+          147.79386676
+        ],
+        "ankle_r": [
+          -5.38295321,
+          43.97790191
+        ]
+      },
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000002558
+      ]
+    },
+    {
+      "task": "walk",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/normal_walk_1_1-2/AB01_normal_walk_1_1-2_angle.csv",
+      "member_crc32": "df11d906",
+      "original_file": "sources/gatech_2023/AB01_normal_walk_1_1-2_angle.csv",
+      "source_sha256": "dc7df380bb3f7b27278a8b2ecc20a44e7716d3873268912452fb37596a0f4acb",
+      "csv": "gatech_2023/ab01_walk.csv",
+      "csv_sha256": "0f626b695e75471b13451ff4cd7925b167b2b3b4eaab5821b02e9931fe5205f9",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "normal_walk_1_1-2",
+      "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping.",
+      "rows": 4001,
+      "source_start_time_s": 40.0,
+      "duration_s": 20.0,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -9.12763347,
+          25.54760015
+        ],
+        "knee_l": [
+          -7.08748229,
+          65.97242723
+        ],
+        "ankle_l": [
+          -27.13006001,
+          12.32442063
+        ],
+        "hip_r": [
+          -12.74515472,
+          25.13525563
+        ],
+        "knee_r": [
+          -6.81447938,
+          67.6879189
+        ],
+        "ankle_r": [
+          -24.39025667,
+          14.25157858
+        ]
+      },
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000002558
+      ]
+    },
+    {
+      "task": "walk",
+      "dataset": "OpenSim Gait2392 distributed example",
+      "subject": "subject01",
+      "source_url": "https://raw.githubusercontent.com/opensim-org/opensim-models/d9b05d470b1a481c222372c85b75772faf8f7792/Pipelines/Gait2392_Simbody/OutputReference/subject01_walk1_ik.mot",
+      "repository_commit": "d9b05d470b1a481c222372c85b75772faf8f7792",
+      "source_path": "Pipelines/Gait2392_Simbody/OutputReference/subject01_walk1_ik.mot",
+      "source_sha256": "36735bfd98f07cf39db48f58da120252284df95e6c15c1130672c599d0a1292c",
+      "csv_sha256": "dfe3e9832b27ff0e3e9875f2e61967676d12f4e4ecc936e807a25f415cd08eb4",
+      "csv": "opensim_gait2392/subject01_walk.csv",
+      "unit_evidence": "https://opensimconfluence.atlassian.net/wiki/spaces/OpenSim/pages/53089415 (legacy .mot angles are degrees; time is seconds)",
+      "source_format": "SIMM/OpenSim .mot, 211 rows, time range 0.5 to 4.0 seconds",
+      "source_angle_unit": "degree",
+      "preprocessing": [
+        "Parse whitespace .mot after endheader and export required channels to CSV",
+        "Subtract first time (0.5 s); retain nominal 60 Hz timestamps rounded to milliseconds in the source",
+        "Negate both knee angles for positive flexion; retain hip and ankle signs",
+        "No interpolation, filtering, time stretching or invented contralateral data"
+      ],
+      "license_note": "Official OpenSim-distributed example. No separate motion-file license appears in this repository; do not assume the software license covers data.",
+      "limitations": "Single walking example, not a population dataset or a ready-to-loop cycle.",
+      "rows": 211,
+      "source_start_time_s": 0.5,
+      "duration_s": 3.5,
+      "sampling_rate_hz": 60,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "sample_interval_s_range": [
+        0.016000000000000014,
+        0.017000000000000348
+      ],
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -22.92802610578931,
+          21.365842900132833
+        ],
+        "knee_l": [
+          -0.17262434758801035,
+          71.86231601361197
+        ],
+        "ankle_l": [
+          -9.710306591927036,
+          16.185723855299827
+        ],
+        "hip_r": [
+          -22.367478514430868,
+          21.93169094092844
+        ],
+        "knee_r": [
+          -1.0530703175058935,
+          70.1811190381802
+        ],
+        "ankle_r": [
+          -8.902557720254801,
+          17.12491256004511
+        ]
+      },
+      "original_file": "sources/opensim_gait2392/subject01_walk1_ik.mot"
+    },
+    {
+      "task": "run",
+      "dataset": "Official OpenSim Hamner running IK example",
+      "subject": "subject02",
+      "source_url": "https://raw.githubusercontent.com/opensim-org/opensim-models/d9b05d470b1a481c222372c85b75772faf8f7792/Pipelines/Hamner/outputReference/ResultsIK/subject02_running_ik.mot",
+      "repository_commit": "d9b05d470b1a481c222372c85b75772faf8f7792",
+      "original_file": "sources/opensim_hamner/subject02_running_ik.mot",
+      "source_sha256": "fcd9398cd940cf031163cd9568394c26a6ddc5ffc20940e80d6d3e6badc6821f",
+      "csv": "opensim_hamner/subject02_run.csv",
+      "csv_sha256": "c0c044f9bb5ba6bf660edcf24c97a38d033fbdb96ca437e2ea4c0589bac623dc",
+      "fullbody_csv": "opensim_hamner/subject02_run_native_fullbody.csv",
+      "fullbody_csv_sha256": "356d4461cbb5c6e9b80b6609bea6c385656425fd0d0aa9c6de06e1034abae25f",
+      "fullbody_columns": [
+        "time",
+        "pelvis_tilt",
+        "pelvis_list",
+        "pelvis_rotation",
+        "pelvis_tx",
+        "pelvis_ty",
+        "pelvis_tz",
+        "hip_flexion_r",
+        "hip_adduction_r",
+        "hip_rotation_r",
+        "knee_angle_r",
+        "ankle_angle_r",
+        "subtalar_angle_r",
+        "mtp_angle_r",
+        "hip_flexion_l",
+        "hip_adduction_l",
+        "hip_rotation_l",
+        "knee_angle_l",
+        "ankle_angle_l",
+        "subtalar_angle_l",
+        "mtp_angle_l",
+        "lumbar_extension",
+        "lumbar_bending",
+        "lumbar_rotation",
+        "arm_flex_r",
+        "arm_add_r",
+        "arm_rot_r",
+        "elbow_flex_r",
+        "pro_sup_r",
+        "wrist_flex_r",
+        "wrist_dev_r",
+        "arm_flex_l",
+        "arm_add_l",
+        "arm_rot_l",
+        "elbow_flex_l",
+        "pro_sup_l",
+        "wrist_flex_l",
+        "wrist_dev_l"
+      ],
+      "units_evidence": "Source header explicitly states inDegrees=yes and SI units: seconds, metres, degrees for angles",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": "Leg export selects six bilateral angles and negates knees. Full-body export retains all native coordinate names/signs. Time zeroed; original spacing preserved. No filtering, mirroring or time warping.",
+      "limitations": "Official IK example, not an additional independent population dataset. Native torso/arm coordinates require retargeting; not simulation validated. No separate motion-file license established in repository.",
+      "rows": 599,
+      "source_start_time_s": 0.0,
+      "duration_s": 9.96666667,
+      "sampling_rate_hz": 60,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "sample_interval_s_range": [
+        0.0166666599999985,
+        0.016666670000001105
+      ],
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -28.96505054,
+          46.7912886
+        ],
+        "knee_l": [
+          10.01174493,
+          103.47720638
+        ],
+        "ankle_l": [
+          -31.68069747,
+          26.28478366
+        ],
+        "hip_r": [
+          -30.16893068,
+          48.17396549
+        ],
+        "knee_r": [
+          9.17277203,
+          111.70676198
+        ],
+        "ankle_r": [
+          -25.91579388,
+          26.3504706
+        ]
+      }
+    }
+  ],
+  "coordinate_model_evidence": "sources/gatech_2023/AB01-Scaled1.osim",
+  "not_training_ready": "Continuous trials are not single seamless cycles. No active configs changed. No human-model retargeting or simulation stability validation performed.",
+  "screened_sources": [
+    {
+      "source": "https://doi.org/10.5281/zenodo.19720803",
+      "status": "not_added",
+      "reason": "Marker-based archive contains .trc marker positions, not joint angles. Requires a validated IK pipeline; do not rename coordinates as angles.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "requires_inverse_kinematics",
+        "details": "Rechecked author code/model archive: supplied 2392_2024_model.osim and marker preprocessing scripts. TRC can be fitted to the supplied model, with subject scaling and marker residual checks. OpenSim IK is not installed here; no reconstruction performed."
+      }
+    },
+    {
+      "source": "https://doi.org/10.26188/24296032.v1",
+      "status": "not_added",
+      "reason": "Inspected Sub7_Kinematics_T3.csv is a Vicon marker-trajectory section, not six joint-angle signals. Original candidate retained under runs/motion_dataset_search_20261114.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "convertible_with_author_pipeline",
+        "details": "Inspected Matlab code/MAIN_KineticsKinematics.m: loads rawMechanics and static markers, calls AnglesCalibration, AltitudeDynamic/RotationCalculation and produces bilateral hip/knee/ankle plus pelvic angles. Port or execute author pipeline, retaining native physical time before cycle normalization; confirm each file sampling rate."
+      }
+    },
+    {
+      "source": "https://doi.org/10.24432/C5861T",
+      "status": "not_added",
+      "reason": "Angles are degrees and bilateral, but time is 0-100% gait phase, not seconds. Physical duration was not verified; no invented duration.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "convertible_phase_only",
+        "details": "Official UCI documentation confirms degrees and 101 points per cycle. Pivoting to bilateral CSV is possible, but seconds cannot be recovered from phase alone without original stride durations."
+      }
+    },
+    {
+      "source": "https://arxiv.org/abs/2504.19149",
+      "status": "not_added",
+      "reason": "Paper focuses exclusively on the leading limb per trial. Simultaneous bilateral channels and physical timestamps not verified.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "bilateral_timing_not_verified",
+        "details": "Format conversion is possible if data supplied, but leading-limb-only trials cannot be converted into simultaneous bilateral recordings. Need inspect downloadable workbook and original timing before acceptance."
+      }
+    },
+    {
+      "source": "https://doi.org/10.35090/gatech/70296",
+      "status": "accepted_labelled_approximations",
+      "reason": "Two protocols downloaded and fully verified for angles/time; neither is claimed as an exact mini-hurdle/quick-step match.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "leg_conversion_complete_torso_pending",
+        "details": "Six trials already converted. Squat segment-transform MAT downloaded; SciPy exposes MCOS table as opaque. Need table decoder or MATLAB export; not inherently unconvertible."
+      }
+    },
+    {
+      "source": "https://www.mdpi.com/2673-4591/159/1/1",
+      "status": "not_added",
+      "reason": "Agility-ladder CSV description lists elbows, shoulders, knees and hips; ankle angles not established.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "required_channels_not_verified",
+        "details": "Existing CSV can be parsed, but listed joint fields omit ankles. Ankle reconstruction would require suitable source landmarks/video and validation, not a format change."
+      }
+    },
+    {
+      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13307445/",
+      "status": "not_added",
+      "reason": "Hurdle study says processed data/code are available from authors upon request, not public downloads; no contact initiated.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "source_files_not_publicly_verified",
+        "details": "Need access to original processed files before evaluating conversion. Published figures alone are not equivalent to raw trajectories."
+      }
+    },
+    {
+      "source": "https://github.com/ubisoft/ubisoft-laforge-animation-dataset",
+      "status": "not_added",
+      "reason": "Broad obstacle-locomotion theme; exact quick-step protocol not established. BVH rotations would require verified anatomical-axis mapping, not arbitrary Euler-channel renaming.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "requires_skeletal_retargeting",
+        "details": "BVH contains full-body local rotations and frame timing. CSV export possible; anatomical flexion requires forward kinematics, rest-pose/axis calibration, then retargeting or IK. Native Euler channels cannot simply be relabelled."
+      }
+    },
+    {
+      "source": "https://doi.org/10.5432/ijshs.202233",
+      "title": "Three-Dimensional Kinematic and Kinetic behavior of the Pelvic Rotation in Mini-Hurdle Sprint: Comparisons to Normal Sprint",
+      "status": "exact_protocol_lead_no_public_raw_download",
+      "publisher_url": "https://www.jstage.jst.go.jp/article/ijshs/22/0/22_202233/_article",
+      "evidence": "Publisher describes twelve sprinters and mini-hurdle sprinting; article lists Supplementary material (0). Raw bilateral hip/knee/ankle trajectories and physical timestamps are not supplied on the article page.",
+      "next_action": "Obtain the original bilateral angle/time files from the authors or identify another publicly downloadable matching release; no contact sent.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "source_files_not_publicly_verified",
+        "details": "Exact mini-hurdle protocol found; publisher lists no supplementary raw files. Conversion cannot reconstruct absent trajectories from summary statistics."
+      }
+    },
+    {
+      "source": "https://doi.org/10.6084/m9.figshare.32513229",
+      "status": "not_added",
+      "reason": "Author README advertises degrees and seven IMU channels, but visualization_tool.py explicitly treats angles relative to vertical and draws segment orientations. Anatomical joint-angle conversion requires calibration/sign validation; do not use raw columns as flexion.",
+      "code_evidence": "https://github.com/MrChenWang/Comprehensive-Multimodal-Gait-Dataset/blob/main/visualization_tool.py",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "requires_segment_to_joint_conversion",
+        "details": "IMU orientations relative to vertical can potentially yield planar joint angles via adjacent-segment differences. Need mounting offsets, sign conventions and validation, including pelvis/foot reference definitions."
+      }
+    },
+    {
+      "source": "https://data.mendeley.com/datasets/p3f7bc28cm/1",
+      "status": "not_verified",
+      "reason": "Public description lists toe clearance and approach-distance outcomes, not six continuous bilateral joint angles. File API returned HTTP 403; no claim of file-level verification.",
+      "conversion_review": {
+        "date": "2026-11-18",
+        "status": "source_channels_not_verified",
+        "details": "Published description emphasizes toe-clearance scalars. Inspect actual accessible files before claiming joint trajectories exist; earlier API request was denied."
+      }
+    },
+    {
+      "source": "https://www.nature.com/articles/s41597-025-05391-0",
+      "status": "converted_all_joint_angle_files",
+      "reason": "All 6882 JointAngle MOT files from all 12 archives converted; see gait120/manifest.json."
+    }
+  ],
+  "candidates": [
+    {
+      "task": "obstacle_walk_1",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/obstacle_walk_1/AB01_obstacle_walk_1_angle.csv",
+      "member_crc32": "e9fcbfb9",
+      "original_file": "sources/gatech_2023/AB01_obstacle_walk_1_angle.csv",
+      "source_sha256": "64911b0375431c4600f87d616261b3913fd64861c05cdf3e373a428dd1d6052f",
+      "csv": "candidates/gatech_2023/ab01_obstacle_walk_1.csv",
+      "csv_sha256": "e5657cb3af34616f2f5ae109ab83551df20a2a6b330c5819c242bf5820017ea8",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "obstacle_walk_1",
+      "limitations": "Verified joint-angle recording; protocol is not an exact mini-hurdle quick-step match. Do not silently substitute for quick_steps.",
+      "rows": 15001,
+      "source_start_time_s": 4.0,
+      "duration_s": 75.0,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000009663
+      ],
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          -9.87802137,
+          55.26823474
+        ],
+        "knee_l": [
+          -7.17914269,
+          105.05739727
+        ],
+        "ankle_l": [
+          -28.08710142,
+          15.30844388
+        ],
+        "hip_r": [
+          -14.97817709,
+          49.68230504
+        ],
+        "knee_r": [
+          -6.59057926,
+          103.02837226
+        ],
+        "ankle_r": [
+          -32.5587303,
+          18.00897623
+        ]
+      },
+      "candidate_for": "quick_steps",
+      "accepted_as_exact_motion": false,
+      "motion_description": "Walking while a foam block is placed on the treadmill at 1.0 m/s",
+      "accepted_as_approximation": true,
+      "acceptance_date": "2026-11-14"
+    },
+    {
+      "task": "tire_run_1",
+      "dataset": "gatech_2023",
+      "subject": "AB01",
+      "source_doi": "https://doi.org/10.35090/gatech/70296",
+      "license": "CC-BY-4.0",
+      "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+      "archive_member": "AB01/tire_run_1/AB01_tire_run_1_angle.csv",
+      "member_crc32": "a8d18b20",
+      "original_file": "sources/gatech_2023/AB01_tire_run_1_angle.csv",
+      "source_sha256": "acdf33e44c5fcc04bed264b13fd0b92455854c9f863f5ab02f6c5263373abcbc",
+      "csv": "candidates/gatech_2023/ab01_tire_run_1.csv",
+      "csv_sha256": "a41ed923cf71709161901332248f8bb5cb67d947935a44d1c17557b686e61c99",
+      "unit_evidence": "Dataset readme: joint kinematics in degrees at 200 Hz; source time column is seconds",
+      "column_mapping": {
+        "hip_l": {
+          "source": "hip_flexion_l",
+          "multiplier": 1.0
+        },
+        "knee_l": {
+          "source": "knee_angle_l",
+          "multiplier": -1.0
+        },
+        "ankle_l": {
+          "source": "ankle_angle_l",
+          "multiplier": 1.0
+        },
+        "hip_r": {
+          "source": "hip_flexion_r",
+          "multiplier": 1.0
+        },
+        "knee_r": {
+          "source": "knee_angle_r",
+          "multiplier": -1.0
+        },
+        "ankle_r": {
+          "source": "ankle_angle_r",
+          "multiplier": 1.0
+        }
+      },
+      "preprocessing": [
+        "Select actual bilateral sagittal hip/knee/ankle columns",
+        "Subtract original first timestamp; preserve original sample spacing and duration",
+        "Negate both knee coordinates: source OpenSim model uses negative flexion; repository uses positive flexion",
+        "Hip flexion and ankle dorsiflexion signs retained; no filtering, interpolation, averaging, mirroring or time stretching"
+      ],
+      "motion_protocol": "tire_run_1",
+      "limitations": "Verified joint-angle recording; protocol is not an exact mini-hurdle quick-step match. Do not silently substitute for quick_steps.",
+      "rows": 10321,
+      "source_start_time_s": 1.1,
+      "duration_s": 51.6,
+      "sampling_rate_hz": 200,
+      "angle_unit": "degree",
+      "time_unit": "second",
+      "sample_interval_s_range": [
+        0.0049999999999954525,
+        0.005000000000002558
+      ],
+      "finite_required_values": true,
+      "strictly_increasing_time": true,
+      "ranges_deg": {
+        "hip_l": [
+          4.10065498,
+          49.19509873
+        ],
+        "knee_l": [
+          -3.0530464,
+          86.84757516
+        ],
+        "ankle_l": [
+          -29.92869324,
+          23.43952486
+        ],
+        "hip_r": [
+          0.40552902,
+          46.89563283
+        ],
+        "knee_r": [
+          1.1206798,
+          76.86190251
+        ],
+        "ankle_r": [
+          -25.62298575,
+          27.32980846
+        ]
+      },
+      "candidate_for": "quick_steps",
+      "accepted_as_exact_motion": false,
+      "motion_description": "Jogging on toes overground with high knees, as if running through tires",
+      "accepted_as_approximation": true,
+      "acceptance_date": "2026-11-14"
+    }
+  ],
+  "remaining_requirement": null,
+  "limitations": "All five motions covered under the user-approved approximation scope. Exact mini-hurdle quick steps remain unavailable in verified public downloads. Imported trials still need cycle selection, retargeting and simulation validation.",
+  "additional_exports": [
+    {
+      "csv": "opensim_gait2392/subject01_walk_extended.csv",
+      "metadata": "opensim_gait2392/subject01_walk_extended.json",
+      "description": "211 rows, 58 columns: six leg angles, native pelvis/lumbar coordinates and upper-body marker-position channels. Not yet retargeted."
+    },
+    {
+      "csv": "opencap_squat/squats_native_fullbody.csv",
+      "metadata": "opencap_squat/squats.json",
+      "description": "801 rows, 8 seconds, 36 native full-body columns; author-selected 1.5-second squat cycle also exported. Not retargeted."
+    }
+  ],
+  "conversion_attempts": [
+    {
+      "source_file": "sources/gatech_2023/squats_1_transforms.mat",
+      "provenance": "sources/gatech_2023/squats_1_transforms.source.json",
+      "status": "downloaded_not_decoded",
+      "reason": "MATLAB v5 MCOS table loaded by SciPy as MatlabOpaque; no MATLAB runtime available. No coordinate values guessed."
+    }
+  ],
+  "bulk_collections": {
+    "gait120": {
+      "manifest": "gait120/manifest.json",
+      "recordings": 6882,
+      "subjects": 120,
+      "task_counts": {
+        "LevelWalking": 1060,
+        "SitToStand": 558,
+        "SlopeAscent": 1172,
+        "SlopeDescent": 1150,
+        "StairAscent": 1187,
+        "StairDescent": 1186,
+        "StandToSit": 569
+      },
+      "units": "native full-body angles degrees, time seconds; coordinate signs retained"
+    },
+    "official_examples": {
+      "manifest": "official_examples/manifest.json",
+      "inventory_entries": 460,
+      "status_counts": {
+        "converted": 304,
+        "excluded": 154,
+        "not_converted": 2
+      },
+      "degree_exports": 59,
+      "scope": "All MOT/STO tables in opensim-models and opencap-processing; published examples in opensim-core. Pinned commits. Core test fixtures inventoried but excluded.",
+      "limitations": "Includes simulation outputs, redundant trials, controls, forces and nonhuman tutorial models. Native units/signs retained; radians or missing units are explicitly flagged. These are not all independent human recordings or ready-to-train degree trajectories. Models/solver code without supplied trajectories cannot be converted into measured data."
+    }
+  }
+}
