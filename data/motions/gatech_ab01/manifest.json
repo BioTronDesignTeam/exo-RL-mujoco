@@ -1,0 +1,836 @@
+{
+ "generated_by": "scripts/prepare_motions.py",
+ "collection_date": "2026-11-14",
+ "method": {
+  "cutoff_hz": 8.0,
+  "min_harmonics": 6,
+  "duration_tol": 0.25,
+  "shape_tol": 2.5,
+  "soft_limit": "1 deg inside each joint limit, 3 deg margin",
+  "csv_rate_hz": 500.0,
+  "ankle": "recorded if the human model performs it, else feet kept flat"
+ },
+ "checks": {
+  "human_model": "myo",
+  "overrides": [],
+  "min_amplitude_retained": 0.8,
+  "max_tracking_rms_deg": 8.0,
+  "episodes": "3 nominal + 10 randomized pilots, exo off, whole episodes",
+  "config": "configs/default.yaml"
+ },
+ "tasks": {
+  "squat": {
+   "source": {
+    "file": "gatech_2023/ab01_squat.csv",
+    "dataset": "gatech_2023",
+    "subject": "AB01",
+    "motion_protocol": "squats_1_0lbs",
+    "source_doi": "https://doi.org/10.35090/gatech/70296",
+    "license": "CC-BY-4.0",
+    "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+    "archive_member": "AB01/squats_1_0lbs/AB01_squats_1_0lbs_angle.csv",
+    "source_sha256": "eeda45487384755682226d0f86440d4186f3d363e0fcba1a9cd5b515c160cff4",
+    "csv_sha256": "344776e7bbbd786706449345061ad59580a94b01066030b750cc827f2fac31cd",
+    "duration_s": 12.5,
+    "sampling_rate_hz": 200,
+    "column_mapping": {
+     "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+     },
+     "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+     },
+     "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+     },
+     "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+     },
+     "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+     },
+     "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+     }
+    },
+    "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping."
+   },
+   "ankle": "recorded",
+   "cycle": {
+    "kind": "squat",
+    "repeats_found": 4,
+    "repeats_used": 4,
+    "period_s": 1.915,
+    "period_sd_s": 0.1116,
+    "harmonics": 15,
+    "phase0_shift": 0.5325,
+    "trunk": "feet flat: mean over legs of ankle + hip - knee",
+    "ankle": "recorded",
+    "between_repeat_sd_deg": {
+     "hip_l": 5.89,
+     "knee_l": 5.95,
+     "ankle_l": 2.64,
+     "hip_r": 5.88,
+     "knee_r": 7.06,
+     "ankle_r": 3.21
+    },
+    "amplitude_retained": {
+     "hip_l": 0.98,
+     "knee_l": 0.98,
+     "ankle_l": 0.97,
+     "hip_r": 0.99,
+     "knee_r": 0.94,
+     "ankle_r": 0.96
+    },
+    "change_from_recording_deg": {
+     "hip_l": [
+      0.02,
+      0.19
+     ],
+     "knee_l": [
+      5.62,
+      20.48
+     ],
+     "ankle_l": [
+      4.57,
+      10.95
+     ],
+     "hip_r": [
+      0.1,
+      0.85
+     ],
+     "knee_r": [
+      6.66,
+      21.29
+     ],
+     "ankle_r": [
+      5.23,
+      12.7
+     ]
+    },
+    "range_deg": {
+     "hip_l": [
+      8.3,
+      109.2
+     ],
+     "knee_l": [
+      15.8,
+      119.0
+     ],
+     "ankle_l": [
+      -0.2,
+      29.0
+     ],
+     "hip_r": [
+      9.1,
+      105.7
+     ],
+     "knee_r": [
+      19.5,
+      119.1
+     ],
+     "ankle_r": [
+      -0.1,
+      29.0
+     ],
+     "trunk": [
+      -8.8,
+      17.4
+     ]
+    },
+    "min_clearance_to_joint_limit_deg": 0.92
+   },
+   "validation": {
+    "nominal": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 1.88,
+     "effort": 0.1208,
+     "residual_x_N": 74.4,
+     "residual_pitch_Nm": 140.7,
+     "implied_speed_m_s": -0.0,
+     "speed_m_s": -0.03
+    },
+    "randomized": {
+     "episodes": 10,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 1.82,
+     "effort": 0.1195,
+     "residual_x_N": 76.9,
+     "residual_pitch_Nm": 144.1,
+     "implied_speed_m_s": -0.0,
+     "speed_m_s": -0.02
+    },
+    "synthetic_for_comparison": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 1.27,
+     "effort": 0.1128,
+     "residual_x_N": 45.7,
+     "residual_pitch_Nm": 57.4,
+     "implied_speed_m_s": 0.0,
+     "speed_m_s": 0.03
+    }
+   },
+   "status": "ready"
+  },
+  "high_knees": {
+   "source": {
+    "file": "gatech_2023/ab01_high_knees.csv",
+    "dataset": "gatech_2023",
+    "subject": "AB01",
+    "motion_protocol": "dynamic_walk_1_high-knees",
+    "source_doi": "https://doi.org/10.35090/gatech/70296",
+    "license": "CC-BY-4.0",
+    "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+    "archive_member": "AB01/dynamic_walk_1_high-knees/AB01_dynamic_walk_1_high-knees_angle.csv",
+    "source_sha256": "b723fa2ee1b2bee22eac26f5bbb4a475520eedecd9b6c27bf55b49b92691b824",
+    "csv_sha256": "301628a4e968d9a301a73c9ae991cfcc3eff544a1bccb07360852e028b6c574c",
+    "duration_s": 20.0,
+    "sampling_rate_hz": 200,
+    "column_mapping": {
+     "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+     },
+     "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+     },
+     "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+     },
+     "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+     },
+     "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+     },
+     "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+     }
+    },
+    "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping."
+   },
+   "ankle": "recorded",
+   "cycle": {
+    "kind": "locomotion",
+    "repeats_found": 30,
+    "repeats_used": 30,
+    "period_s": 0.6523,
+    "period_sd_s": 0.0158,
+    "harmonics": 6,
+    "phase0_shift": 0.0375,
+    "trunk": "constant 0 deg",
+    "ankle": "recorded",
+    "between_repeat_sd_deg": {
+     "hip_l": 2.66,
+     "knee_l": 2.97,
+     "ankle_l": 2.51,
+     "hip_r": 2.72,
+     "knee_r": 3.18,
+     "ankle_r": 2.49
+    },
+    "amplitude_retained": {
+     "hip_l": 0.99,
+     "knee_l": 0.97,
+     "ankle_l": 0.99,
+     "hip_r": 0.98,
+     "knee_r": 0.99,
+     "ankle_r": 0.96
+    },
+    "change_from_recording_deg": {
+     "hip_l": [
+      0.04,
+      0.24
+     ],
+     "knee_l": [
+      0.04,
+      0.2
+     ],
+     "ankle_l": [
+      0.03,
+      0.09
+     ],
+     "hip_r": [
+      0.02,
+      0.1
+     ],
+     "knee_r": [
+      0.02,
+      0.05
+     ],
+     "ankle_r": [
+      0.02,
+      0.06
+     ]
+    },
+    "range_deg": {
+     "hip_l": [
+      3.7,
+      66.1
+     ],
+     "knee_l": [
+      20.2,
+      107.8
+     ],
+     "ankle_l": [
+      -30.7,
+      6.5
+     ],
+     "hip_r": [
+      1.8,
+      59.6
+     ],
+     "knee_r": [
+      16.3,
+      107.2
+     ],
+     "ankle_r": [
+      -20.7,
+      9.2
+     ],
+     "trunk": [
+      0.0,
+      0.0
+     ]
+    },
+    "min_clearance_to_joint_limit_deg": 9.32
+   },
+   "validation": {
+    "nominal": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 2.82,
+     "effort": 0.1407,
+     "residual_x_N": 56.8,
+     "residual_pitch_Nm": 188.7,
+     "implied_speed_m_s": 0.62,
+     "speed_m_s": 0.72
+    },
+    "randomized": {
+     "episodes": 10,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 2.69,
+     "effort": 0.1455,
+     "residual_x_N": 49.2,
+     "residual_pitch_Nm": 152.6,
+     "implied_speed_m_s": 0.62,
+     "speed_m_s": 0.66
+    },
+    "synthetic_for_comparison": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 6.23,
+     "effort": 0.2068,
+     "residual_x_N": 99.4,
+     "residual_pitch_Nm": 310.5,
+     "implied_speed_m_s": -0.09,
+     "speed_m_s": 0.1
+    }
+   },
+   "status": "ready"
+  },
+  "quick_steps": {
+   "source": {
+    "file": "candidates/gatech_2023/ab01_tire_run_1.csv",
+    "dataset": "gatech_2023",
+    "subject": "AB01",
+    "motion_protocol": "tire_run_1",
+    "source_doi": "https://doi.org/10.35090/gatech/70296",
+    "license": "CC-BY-4.0",
+    "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+    "archive_member": "AB01/tire_run_1/AB01_tire_run_1_angle.csv",
+    "source_sha256": "acdf33e44c5fcc04bed264b13fd0b92455854c9f863f5ab02f6c5263373abcbc",
+    "csv_sha256": "a41ed923cf71709161901332248f8bb5cb67d947935a44d1c17557b686e61c99",
+    "duration_s": 51.6,
+    "sampling_rate_hz": 200,
+    "column_mapping": {
+     "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+     },
+     "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+     },
+     "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+     },
+     "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+     },
+     "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+     },
+     "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+     }
+    },
+    "limitations": "Verified joint-angle recording; protocol is not an exact mini-hurdle quick-step match. Do not silently substitute for quick_steps."
+   },
+   "ankle": "recorded",
+   "cycle": {
+    "kind": "locomotion",
+    "repeats_found": 64,
+    "repeats_used": 45,
+    "period_s": 0.5636,
+    "period_sd_s": 0.0516,
+    "harmonics": 6,
+    "phase0_shift": 0.04,
+    "trunk": "constant 0 deg",
+    "ankle": "recorded",
+    "between_repeat_sd_deg": {
+     "hip_l": 6.0,
+     "knee_l": 6.64,
+     "ankle_l": 7.57,
+     "hip_r": 7.51,
+     "knee_r": 5.52,
+     "ankle_r": 7.26
+    },
+    "amplitude_retained": {
+     "hip_l": 0.62,
+     "knee_l": 0.83,
+     "ankle_l": 0.46,
+     "hip_r": 0.48,
+     "knee_r": 0.9,
+     "ankle_r": 0.45
+    },
+    "change_from_recording_deg": {
+     "hip_l": [
+      0.04,
+      0.3
+     ],
+     "knee_l": [
+      0.09,
+      0.5
+     ],
+     "ankle_l": [
+      0.03,
+      0.17
+     ],
+     "hip_r": [
+      0.05,
+      0.31
+     ],
+     "knee_r": [
+      0.01,
+      0.02
+     ],
+     "ankle_r": [
+      0.13,
+      0.75
+     ]
+    },
+    "range_deg": {
+     "hip_l": [
+      24.5,
+      36.3
+     ],
+     "knee_l": [
+      31.0,
+      63.5
+     ],
+     "ankle_l": [
+      -6.8,
+      4.0
+     ],
+     "hip_r": [
+      22.7,
+      32.7
+     ],
+     "knee_r": [
+      27.8,
+      65.6
+     ],
+     "ankle_r": [
+      -2.2,
+      8.5
+     ],
+     "trunk": [
+      0.0,
+      0.0
+     ]
+    },
+    "min_clearance_to_joint_limit_deg": 21.54
+   },
+   "validation": {
+    "synthetic_for_comparison": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 4.28,
+     "effort": 0.2659,
+     "residual_x_N": 36.3,
+     "residual_pitch_Nm": 272.5,
+     "implied_speed_m_s": -0.1,
+     "speed_m_s": -0.07
+    }
+   },
+   "ankle_attempts": {
+    "recorded": [
+     "repeats too irregular to average: averaging keeps 45% of a joint's range of motion (< 80%)"
+    ]
+   },
+   "status": "not written (synthetic placeholder used)",
+   "reason": "repeats too irregular to average: averaging keeps 45% of a joint's range of motion (< 80%)"
+  },
+  "backward_walk": {
+   "source": {
+    "file": "gatech_2023/ab01_backward_walk.csv",
+    "dataset": "gatech_2023",
+    "subject": "AB01",
+    "motion_protocol": "walk_backward_1_0-6",
+    "source_doi": "https://doi.org/10.35090/gatech/70296",
+    "license": "CC-BY-4.0",
+    "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+    "archive_member": "AB01/walk_backward_1_0-6/AB01_walk_backward_1_0-6_angle.csv",
+    "source_sha256": "43ee5fb04a2f5509ec6c0b8df9e8cea9f2bae4a726e27159708a611f6bfcce38",
+    "csv_sha256": "7a59b387bdd7606bd5a9b3956d7f0f989bba9ba02ad8c798d0fa4aff1e2dc1c2",
+    "duration_s": 20.0,
+    "sampling_rate_hz": 200,
+    "column_mapping": {
+     "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+     },
+     "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+     },
+     "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+     },
+     "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+     },
+     "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+     },
+     "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+     }
+    },
+    "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping."
+   },
+   "ankle": "recorded",
+   "cycle": {
+    "kind": "locomotion",
+    "repeats_found": 15,
+    "repeats_used": 15,
+    "period_s": 1.2727,
+    "period_sd_s": 0.0417,
+    "harmonics": 10,
+    "phase0_shift": 0.8575,
+    "trunk": "constant 0 deg",
+    "ankle": "recorded",
+    "between_repeat_sd_deg": {
+     "hip_l": 1.6,
+     "knee_l": 2.43,
+     "ankle_l": 1.96,
+     "hip_r": 1.73,
+     "knee_r": 2.95,
+     "ankle_r": 1.89
+    },
+    "amplitude_retained": {
+     "hip_l": 0.96,
+     "knee_l": 0.97,
+     "ankle_l": 0.98,
+     "hip_r": 0.98,
+     "knee_r": 1.0,
+     "ankle_r": 0.97
+    },
+    "change_from_recording_deg": {
+     "hip_l": [
+      0.02,
+      0.13
+     ],
+     "knee_l": [
+      1.2,
+      4.33
+     ],
+     "ankle_l": [
+      0.01,
+      0.02
+     ],
+     "hip_r": [
+      0.01,
+      0.07
+     ],
+     "knee_r": [
+      1.47,
+      5.35
+     ],
+     "ankle_r": [
+      0.02,
+      0.12
+     ]
+    },
+    "range_deg": {
+     "hip_l": [
+      1.6,
+      13.8
+     ],
+     "knee_l": [
+      1.3,
+      43.7
+     ],
+     "ankle_l": [
+      -11.7,
+      15.0
+     ],
+     "hip_r": [
+      -1.1,
+      16.6
+     ],
+     "knee_r": [
+      1.1,
+      42.4
+     ],
+     "ankle_r": [
+      -10.8,
+      14.2
+     ],
+     "trunk": [
+      0.0,
+      0.0
+     ]
+    },
+    "min_clearance_to_joint_limit_deg": 1.11
+   },
+   "validation": {
+    "nominal": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 1.25,
+     "effort": 0.1205,
+     "residual_x_N": 214.7,
+     "residual_pitch_Nm": 113.0,
+     "implied_speed_m_s": 0.01,
+     "speed_m_s": -0.42
+    },
+    "randomized": {
+     "episodes": 10,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 1.3,
+     "effort": 0.1275,
+     "residual_x_N": 218.4,
+     "residual_pitch_Nm": 120.3,
+     "implied_speed_m_s": 0.01,
+     "speed_m_s": -0.42
+    },
+    "synthetic_for_comparison": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 5.13,
+     "effort": 0.2073,
+     "residual_x_N": 160.2,
+     "residual_pitch_Nm": 196.1,
+     "implied_speed_m_s": -0.53,
+     "speed_m_s": -0.85
+    }
+   },
+   "status": "ready"
+  },
+  "walk": {
+   "source": {
+    "file": "gatech_2023/ab01_walk.csv",
+    "dataset": "gatech_2023",
+    "subject": "AB01",
+    "motion_protocol": "normal_walk_1_1-2",
+    "source_doi": "https://doi.org/10.35090/gatech/70296",
+    "license": "CC-BY-4.0",
+    "source_url": "https://repository.gatech.edu/server/api/core/bitstreams/03f9679f-28ce-4d8b-b195-4b3b1aa4adc9/content",
+    "archive_member": "AB01/normal_walk_1_1-2/AB01_normal_walk_1_1-2_angle.csv",
+    "source_sha256": "dc7df380bb3f7b27278a8b2ecc20a44e7716d3873268912452fb37596a0f4acb",
+    "csv_sha256": "0f626b695e75471b13451ff4cd7925b167b2b3b4eaab5821b02e9931fe5205f9",
+    "duration_s": 20.0,
+    "sampling_rate_hz": 200,
+    "column_mapping": {
+     "hip_l": {
+      "source": "hip_flexion_l",
+      "multiplier": 1.0
+     },
+     "knee_l": {
+      "source": "knee_angle_l",
+      "multiplier": -1.0
+     },
+     "ankle_l": {
+      "source": "ankle_angle_l",
+      "multiplier": 1.0
+     },
+     "hip_r": {
+      "source": "hip_flexion_r",
+      "multiplier": 1.0
+     },
+     "knee_r": {
+      "source": "knee_angle_r",
+      "multiplier": -1.0
+     },
+     "ankle_r": {
+      "source": "ankle_angle_r",
+      "multiplier": 1.0
+     }
+    },
+    "limitations": "Continuous trial, not a seamless single-cycle training reference. High-knee jogging is on a treadmill, not hurdle hopping."
+   },
+   "ankle": "flat",
+   "cycle": {
+    "kind": "locomotion",
+    "repeats_found": 18,
+    "repeats_used": 17,
+    "period_s": 1.0874,
+    "period_sd_s": 0.0131,
+    "harmonics": 8,
+    "phase0_shift": 0.3725,
+    "trunk": "constant 0 deg",
+    "ankle": "feet parallel to the floor: trunk - hip + knee",
+    "between_repeat_sd_deg": {
+     "hip_l": 1.21,
+     "knee_l": 1.43,
+     "ankle_l": 1.99,
+     "hip_r": 1.11,
+     "knee_r": 1.79,
+     "ankle_r": 1.83
+    },
+    "amplitude_retained": {
+     "hip_l": 1.0,
+     "knee_l": 0.99,
+     "ankle_l": 0.99,
+     "hip_r": 0.98,
+     "knee_r": 1.0,
+     "ankle_r": 0.99
+    },
+    "change_from_recording_deg": {
+     "hip_l": [
+      0.02,
+      0.05
+     ],
+     "knee_l": [
+      1.71,
+      6.73
+     ],
+     "ankle_l": [
+      23.1,
+      51.16
+     ],
+     "hip_r": [
+      0.02,
+      0.06
+     ],
+     "knee_r": [
+      1.67,
+      6.58
+     ],
+     "ankle_r": [
+      21.0,
+      44.59
+     ]
+    },
+    "range_deg": {
+     "hip_l": [
+      -7.5,
+      22.9
+     ],
+     "knee_l": [
+      0.6,
+      62.5
+     ],
+     "ankle_l": [
+      -19.5,
+      29.3
+     ],
+     "hip_r": [
+      -10.2,
+      22.0
+     ],
+     "knee_r": [
+      0.5,
+      64.2
+     ],
+     "ankle_r": [
+      -19.9,
+      29.3
+     ],
+     "trunk": [
+      0.0,
+      0.0
+     ]
+    },
+    "min_clearance_to_joint_limit_deg": 0.5
+   },
+   "validation": {
+    "nominal": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 0.87,
+     "effort": 0.0634,
+     "residual_x_N": 55.3,
+     "residual_pitch_Nm": 120.4,
+     "implied_speed_m_s": 0.92,
+     "speed_m_s": 0.91
+    },
+    "randomized": {
+     "episodes": 10,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 0.86,
+     "effort": 0.0669,
+     "residual_x_N": 55.7,
+     "residual_pitch_Nm": 121.2,
+     "implied_speed_m_s": 0.92,
+     "speed_m_s": 0.91
+    },
+    "synthetic_for_comparison": {
+     "episodes": 3,
+     "failed": 0,
+     "fail_reasons": [],
+     "tracking_rms_deg": 3.16,
+     "effort": 0.1811,
+     "residual_x_N": 111.3,
+     "residual_pitch_Nm": 187.8,
+     "implied_speed_m_s": 1.17,
+     "speed_m_s": 1.36
+    }
+   },
+   "ankle_attempts": {
+    "recorded": [
+     "nominal: 2/3 episodes ended early (tracking)",
+     "nominal: tracking error 8.68 deg",
+     "randomized: 8/10 episodes ended early (tracking)",
+     "randomized: tracking error 8.3 deg"
+    ],
+    "flat": "passed"
+   },
+   "status": "ready"
+  }
+ }
+}

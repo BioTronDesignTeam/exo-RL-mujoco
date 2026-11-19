@@ -171,7 +171,9 @@ class MyoHumanExoModel:
         root = joint("root")
         self.root_qpos = m.jnt_qposadr[root] + np.array([0, 2])
         self.root_dof = m.jnt_dofadr[root] + np.array([0, 2])
+        self.root_pitch_dof = m.jnt_dofadr[root] + 4        # angular velocity about the root's local y
         self.root_body = m.jnt_bodyid[root]
+        self._pose_data = mujoco.MjData(m)                   # kinematic queries that must not touch self.data
         self.feet = [i for i in range(m.ngeom)
                      if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or "").startswith(("foot", "bofoot"))]
         self.segments = self._segment_info()
@@ -195,7 +197,7 @@ class MyoHumanExoModel:
                            shank_foot_com=float(np.linalg.norm(sc - knee)), leg_len=float(hip[2]))
 
     def set_pose(self, q_human: np.ndarray, trunk_pitch: float, qd_human=None, root_vx: float = 0.0,
-                 clearance: float = 0.0):
+                 clearance: float = 0.0, root_vz: float = 0.0, trunk_vel: float = 0.0):
         """Pose with the lowest foot touching the floor (see HumanExoModel.set_pose)."""
         from .muscle_human import stand_on_floor
         m, d = self.model, self.data
@@ -203,8 +205,19 @@ class MyoHumanExoModel:
         d.qpos[self.root_qpos[1]] += clearance
         if qd_human is not None:
             d.qvel[self.human_dof] = qd_human
-        d.qvel[self.root_dof[0]] = root_vx
+        d.qvel[self.root_dof] = [root_vx, root_vz]
+        d.qvel[self.root_pitch_dof] = trunk_vel     # the root is pitched about world y, so local y = pitch axis
         mujoco.mj_forward(m, d)
+
+    def pose_height(self, q_human: np.ndarray, trunk_pitch: float) -> float:
+        """Pelvis height of a pose whose lowest foot touches the floor (simulation untouched)."""
+        from .muscle_human import stand_on_floor
+        stand_on_floor(self.model, self._pose_data, q_human, trunk_pitch)
+        return float(self._pose_data.qpos[self.root_qpos[1]])
+
+    def lowest_pelvis_height(self, motion, n: int = 100) -> float:
+        """Lowest pelvis height over a motion's cycle, posed with the lowest foot on the floor."""
+        return min(self.pose_height(*motion.angles(motion.period * i / n)) for i in range(n))
 
     def implied_speed(self, motion, n: int = 200) -> float:
         """Average forward speed implied by a motion if the lowest foot does not slip."""

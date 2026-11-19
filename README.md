@@ -325,7 +325,8 @@ unless `--init-from` is used.
 | `jog` | forward | no | Grounded running; fails with the unpowered exo worn |
 
 - **Train on a task:** add it to `tasks.names`.
-- **Use your own recordings:** put `<task>.csv` files in `data/motions/` and set `tasks.data_dir=data/motions` (format in `data/motions/README.md`).
+- **Use recorded motions:** `--set human.model=myo --set tasks.data_dir=data/motions/gatech_ab01` swaps in real squat, high knees, backward walk and walk (Georgia Tech 2023, subject AB01); `quick_steps` keeps its synthetic placeholder. `scripts/prepare_motions.py` builds that folder from the collected recordings and only writes tasks the MyoLeg human can perform; see `data/motions/gatech_ab01/README.md`.
+- **Use your own recordings:** put `<task>.csv` files in a folder and set `tasks.data_dir` to it (format in `data/motions/README.md`).
 
 ---
 
@@ -346,7 +347,7 @@ Pass any of these with `--set` on `train.py` or `view.py`.
 | `exo_hardware.enabled=false` | Simulate without the exo |
 | `"tasks.names=[squat, high_knees]"` | Tasks to train on |
 | `tasks.circuit_order=ace` | Chained episodes follow the ACE course order |
-| `tasks.data_dir=data/motions` | Use recorded motion CSVs |
+| `tasks.data_dir=data/motions/gatech_ab01` | Use recorded motion CSVs (tasks without one stay synthetic) |
 | `randomization.enabled=false` | Nominal pilot every episode |
 | `reward.w_effort=3.0` | Weight on human effort |
 | `"reward.effort_joints=[hip, knee]"` | Count only exo-assisted joints as effort in the reward (evaluation stays whole-body) |
@@ -370,10 +371,11 @@ exo_rl/control/   observation + torque pipeline — shared with hardware, keep i
 exo_rl/envs/      environment, reward, randomization, parallel collection (vector.py)
 exo_rl/agents/    TD3 / DDPG learning algorithm
 exo_rl/*.py       training loop, evaluation, warm start (teacher + BC), viewing helpers
-scripts/          train, pretrain_bc, view, plot_training, watch_training, evaluate, export, exo_info
+scripts/          train, pretrain_bc, view, plot_training, watch_training, evaluate, export, exo_info,
+                  prepare_motions
 deploy/           hardware loop, motor map, safety monitor
-data/motions/     your motion recordings (CSV)
-tests/            77 tests (run by CI on every PR)
+data/motions/     motion recordings (CSV); gatech_ab01/ = prepared real motions
+tests/            89 tests (run by CI on every PR)
 runs/demo/        example trained run
 ```
 
@@ -393,7 +395,7 @@ runs/demo/        example trained run
 
 - **Read effort as relative.** The simulated human's absolute effort runs high. Compare exo on vs. off, or vs. no exo.
 - **The exo has a cost.** Wearing it unpowered raises effort by 15–38%. The policy must repay that before the pilot comes out ahead.
-- **Placeholders to replace:** the motions are synthetic until you record real ones, and the URDF torque limit of 10 Nm looks like an exporter default.
+- **Placeholders to replace:** the motions are synthetic by default (recorded ones for the MyoLeg human are in `data/motions/gatech_ab01`), and the URDF torque limit of 10 Nm looks like an exporter default.
 - **Speed.** With default settings training runs ~70–115 steps/s depending on the CPU (1M steps take 2.5–4 h); gradient updates, not the simulation, dominate. See [Training faster](#training-faster), and use `--max-minutes` / `--resume` to split long runs.
 
 ---
@@ -412,7 +414,7 @@ Open tasks for contributors. Pick one, put your name next to it, and see
 
 ### Simulation
 - [ ] **Randomization ranges.** Check `randomization:` against real measurements (pilot sizes, actuator latency, torque noise) once hardware data exists.
-- [ ] **Real motions.** Replace the synthetic reference motions with recorded CSVs in `data/motions/`.
+- [ ] **Real motions.** Squat, high knees, backward walk and walk are recorded (`data/motions/gatech_ab01`, checked on `human.model=myo`). Still synthetic: `quick_steps` (the tire-run substitute is too irregular to average into one cycle). Details in `data/motions/gatech_ab01/manifest.json`.
 - [ ] **Exo model.** The URDF torque limit of 10 Nm looks like an exporter default; set the real actuator limits.
 - [ ] **Human model.** Upgrade to a musculoskeletal model (e.g. MyoSuite) and use muscle activation as the effort signal.
 

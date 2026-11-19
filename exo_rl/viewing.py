@@ -51,8 +51,7 @@ def reset_view_env(env: ExoAssistEnv, task: str, mode: str, seed: int = 0, rando
         env.ref = ReferenceTrajectory([(env.motions[n], 4.0) for n in names] * 20,
                                       blend=float(tcfg.get("blend_seconds", 0.5)))
         env.speeds = {m.name: env.hm.implied_speed(m) for m, _ in env.ref.segments}
-        q, qd, _, tr, _ = env.ref.sample(0.0)
-        env.hm.set_pose(q, tr, qd, root_vx=env._v_ref(0.0))
+        env.start_pose()
         env.human.reset()
     return obs
 

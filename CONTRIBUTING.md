@@ -49,7 +49,7 @@ is simulation or training.
 |---|---|
 | Reward weights | `reward:` in `configs/default.yaml` |
 | Reward terms | `exo_rl/envs/rewards.py` |
-| Add a motion | `exo_rl/sim/reference.py` (synthetic) or a CSV in `data/motions/` |
+| Add a motion | `exo_rl/sim/reference.py` (synthetic) or a CSV in `data/motions/`; turn a long recording into one with `scripts/prepare_motions.py` (`exo_rl/motion_data.py`) |
 | Randomization ranges | `randomization:` in the config; new parameters in `envs/randomization.py` |
 | Observation contents | `exo_rl/control/observation.py`. **Hardware code**: re-export and re-test on hardware |
 | Torque limits/shaping | `exo:` in the config; logic in `control/torque_pipeline.py` (**hardware code**) |

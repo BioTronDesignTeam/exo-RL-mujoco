@@ -98,6 +98,26 @@ class ExoAssistEnv(gym.Env):
             self.limb = LimbParams.from_segment_info(self.hm.segments)
         self.pipeline = ExoTorquePipeline(self.cfg["exo"], self.limb, self.control_dt)
         self.reward_fn = EffortReward(self.cfg["reward"], self.human.tau_max, self.pipeline.tau_max)
+        self.lowest_pelvis = {}         # motion name -> lowest reference pelvis height on this body
+
+    def _fall_height(self) -> float:
+        """Pelvis height below which the human has fallen: min_pelvis_height_frac of leg length,
+        lowered for references that go deeper themselves (e.g. a recorded deep squat)."""
+        term = self.cfg["termination"]
+        leg = self.hm.segments.leg_len
+        for m, _ in self.ref.segments:
+            if m.name not in self.lowest_pelvis:
+                self.lowest_pelvis[m.name] = self.hm.lowest_pelvis_height(m)
+        lowest = min(self.lowest_pelvis[m.name] for m, _ in self.ref.segments)
+        return min(term["min_pelvis_height_frac"] * leg, lowest - term.get("fall_margin_frac", 0.1) * leg)
+
+    def start_pose(self):
+        """Pose the human at the reference's t=0, moving with it: joints, forward speed, and the
+        pelvis' vertical / pitch velocity with the feet on the floor."""
+        q, qd, _, trunk, trunk_d = self.ref.sample(0.0)
+        h = 2e-3
+        vz = (self.hm.pose_height(*self.ref.angles(h)) - self.hm.pose_height(*self.ref.angles(-h))) / (2 * h)
+        self.hm.set_pose(q, trunk, qd, root_vx=self._v_ref(0.0), root_vz=vz, trunk_vel=trunk_d)
 
     def _make_reference(self, task: str | None) -> ReferenceTrajectory:
         tcfg = self.cfg["tasks"]
@@ -158,8 +178,7 @@ class ExoAssistEnv(gym.Env):
         self.speeds = {m.name: self.hm.implied_speed(m) for m, _ in self.ref.segments}
 
         self.t, self.steps = 0.0, 0
-        q, qd, _, trunk, _ = self.ref.sample(0.0)
-        self.hm.set_pose(q, trunk, qd, root_vx=self._v_ref(0.0))
+        self.start_pose()
         self.human.reset()
         self.pipeline.reset()
         self.obs_builder.reset()
@@ -241,7 +260,7 @@ class ExoAssistEnv(gym.Env):
 
         term_cfg = self.cfg["termination"]
         unstable = not np.all(np.isfinite(d.qpos))
-        fell = d.qpos[hm.root_qpos[1]] < term_cfg["min_pelvis_height_frac"] * hm.segments.leg_len
+        fell = d.qpos[hm.root_qpos[1]] < self._fall_height()
         lost = np.max(np.abs(q_err)) > np.radians(term_cfg["max_joint_error_deg"])
         terminated = bool(unstable or fell or lost)
         truncated = self.steps >= self.max_steps

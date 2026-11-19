@@ -93,6 +93,7 @@ reward:
 termination:
   max_joint_error_deg: 45
   min_pelvis_height_frac: 0.5
+  fall_margin_frac: 0.1      # deeper references (recorded deep squats): fell = this far below their lowest pelvis
 
 randomization:
   enabled: true
